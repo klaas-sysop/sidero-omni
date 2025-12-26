@@ -1,6 +1,6 @@
-FROM ghcr.io/siderolabs/omni:latest
+# Build stage: prepare scripts and tools
+FROM debian:bookworm-slim AS builder
 
-# Install required tools for certificate generation
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
@@ -15,17 +15,22 @@ RUN apt-get update && apt-get install -y \
 # Create directories for certs and scripts
 RUN mkdir -p /etc/omni/tls /scripts
 
-# Copy entrypoint script
+# Copy scripts from build context
 COPY docker-entrypoint.sh /scripts/entrypoint.sh
 RUN chmod +x /scripts/entrypoint.sh
 
-# Copy cert generation helper script
 COPY generate-certs.sh /scripts/generate-certs.sh
 RUN chmod +x /scripts/generate-certs.sh
 
-# Copy GPG key generation helper
 COPY generate-gpg-key.sh /scripts/generate-gpg-key.sh
 RUN chmod +x /scripts/generate-gpg-key.sh
+
+# Final stage: use omni base image
+FROM ghcr.io/siderolabs/omni:latest
+
+# Copy scripts and tools from builder
+COPY --from=builder /scripts /scripts
+COPY --from=builder /etc/omni/tls /etc/omni/tls
 
 # Set working directory
 WORKDIR /workspace
