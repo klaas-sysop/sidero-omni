@@ -47,6 +47,8 @@ COPY --from=builder /usr/share/ca-certificates /usr/share/ca-certificates
 # Copy scripts and tools from builder
 COPY --from=builder /scripts /scripts
 COPY --from=builder /etc/omni/tls /etc/omni/tls
+COPY --from=builder /usr/lib/python3 /usr/lib/python3
+COPY --from=builder /usr/lib/python3.11 /usr/lib/python3.11
 
 # Set working directory
 WORKDIR /workspace
