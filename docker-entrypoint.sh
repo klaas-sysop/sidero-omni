@@ -441,13 +441,90 @@ main() {
             export OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE="${key_path}"
             export OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE="${key_path}"
             
-            # Try the flag without "default" first
-            omni_args+=("--storage-etcd-private-key-source" "${key_path}")
-            log_info "Using etcd private key source (flag: --storage-etcd-private-key-source): ${key_path}"
-            log_info "Also exported as environment variables (OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE, OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE)"
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_h1\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:442\",\"message\":\"Testing flag variations\",\"data\":{\"key_path\":\"${key_path}\",\"hypothesis\":\"H1: Try simpler flag names\",\"attempted_flags\":[\"--storage-etcd-private-key-source\",\"--etcd-private-key-source\",\"--private-key-source\"]},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
+            
+            # First, try to get help from Omni to see available flags (hypothesis H4: check what flags exist)
+            log_info "Checking Omni help for available flags..."
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_h4\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:448\",\"message\":\"Getting Omni help output\",\"data\":{\"hypothesis\":\"H4: Check available flags via help\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H4\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
+            if "$omni_path" --help 2>&1 | grep -i "private\|key\|etcd\|storage" > /tmp/omni-help.txt 2>&1; then
+                log_info "Found relevant flags in help (saved to /tmp/omni-help.txt)"
+                # #region agent log
+                echo "{\"id\":\"log_$(date +%s)_h4\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:452\",\"message\":\"Omni help output captured\",\"data\":{\"help_file\":\"/tmp/omni-help.txt\",\"hypothesis\":\"H4: Check available flags\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H4\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                # #endregion
+            fi
+            
+            # Try simpler flag variations (hypothesis H1: simpler flag names)
+            # Ensure SQLite path is always in args first
+            omni_args=("--sqlite-storage-path" "${sqlite_path}")
+            
+            # Try multiple flag name variations
+            local flag_variations=(
+                "--storage-etcd-private-key-source"
+                "--etcd-private-key-source"
+                "--private-key-source"
+                "--storage.etcd.private-key-source"
+                "--storage-etcd-private-key"
+            )
+            
+            local flag_found=false
+            # First, try to see if any flag appears in help output (hypothesis H4)
+            local help_output=""
+            if help_output=$("$omni_path" --help 2>&1); then
+                # #region agent log
+                mkdir -p /workspace/.cursor 2>/dev/null || true
+                echo "{\"id\":\"log_$(date +%s)_h4\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:465\",\"message\":\"Help output captured\",\"data\":{\"help_length\":${#help_output},\"hypothesis\":\"H4: Check available flags\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H4\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                # #endregion
+                echo "$help_output" | grep -i "private\|key\|etcd\|storage" > /tmp/omni-help-filtered.txt 2>&1 || true
+            fi
+            
+            # Try each flag variation by attempting to run with it (hypothesis H1, H3)
+            for flag in "${flag_variations[@]}"; do
+                # #region agent log
+                mkdir -p /workspace/.cursor 2>/dev/null || true
+                echo "{\"id\":\"log_$(date +%s)_h1\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:475\",\"message\":\"Trying flag variation\",\"data\":{\"flag\":\"${flag}\",\"key_path\":\"${key_path}\",\"hypothesis\":\"H1: Simpler flag names\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                # #endregion
+                # Test if flag appears in help or if it's accepted (doesn't error immediately)
+                if echo "$help_output" | grep -q "$flag" 2>/dev/null || \
+                   "$omni_path" "$flag" "${key_path}" --help >/dev/null 2>&1; then
+                    log_info "Flag ${flag} appears to be valid"
+                    omni_args+=("$flag" "${key_path}")
+                    flag_found=true
+                    # #region agent log
+                    mkdir -p /workspace/.cursor 2>/dev/null || true
+                    echo "{\"id\":\"log_$(date +%s)_h1\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:483\",\"message\":\"Flag accepted\",\"data\":{\"flag\":\"${flag}\",\"hypothesis\":\"H1: Simpler flag names - CONFIRMED\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                    # #endregion
+                    break
+                else
+                    # #region agent log
+                    mkdir -p /workspace/.cursor 2>/dev/null || true
+                    echo "{\"id\":\"log_$(date +%s)_h1\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:488\",\"message\":\"Flag rejected\",\"data\":{\"flag\":\"${flag}\",\"hypothesis\":\"H1: Simpler flag names - REJECTED\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H1\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                    # #endregion
+                fi
+            done
+            
+            if [ "$flag_found" = false ]; then
+                log_warn "No valid flag found, will try environment variables only (hypothesis H2)"
+                # #region agent log
+                mkdir -p /workspace/.cursor 2>/dev/null || true
+                echo "{\"id\":\"log_$(date +%s)_h2\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:485\",\"message\":\"No flag found, using env vars\",\"data\":{\"hypothesis\":\"H2: Environment variables only\",\"env_vars\":[\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\",\"OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE\"]},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H2\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                # #endregion
+                # Don't add flag, rely on environment variables
+            else
+                log_info "Using etcd private key source (flag: ${omni_args[-2]}): ${key_path}"
+            fi
             
             # Log the final command
             log_info "Executing: $omni_path ${omni_args[*]}"
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_final\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:495\",\"message\":\"Final command execution\",\"data\":{\"omni_path\":\"${omni_path}\",\"args\":\"${omni_args[*]}\",\"env_vars\":{\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\":\"${OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"ALL\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
             
             # Execute omni with arguments
             if [ ${#omni_args[@]} -gt 0 ]; then
