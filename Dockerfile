@@ -31,6 +31,11 @@ FROM ghcr.io/siderolabs/omni:latest
 # Note: We preserve the base image's structure and binaries.
 # The omni binary from the base image should remain intact.
 # We only add additional tools (bash, curl, etc.) from the builder stage.
+#
+# IMPORTANT: We override the base image's entrypoint with our custom script.
+# The base image may read environment variables during initialization, so we set
+# ENV instructions below to ensure OMNI_AUTH_* variables are available from
+# container start. docker-compose.yml environment values will override these defaults.
 
 # Copy bash and runtime libraries from builder
 COPY --from=builder /bin/bash /bin/bash
@@ -58,6 +63,21 @@ COPY --from=builder /usr/lib/python3.11 /usr/lib/python3.11
 
 # Set working directory
 WORKDIR /workspace
+
+# Authentication Configuration (defaults, can be overridden by docker-compose.yml)
+# These ENV instructions ensure variables are available from container initialization
+# docker-compose.yml environment values will override these defaults
+ENV OMNI_AUTH_AUTH0_ENABLED=false
+ENV OMNI_AUTH_AUTH0_DOMAIN=""
+ENV OMNI_AUTH_AUTH0_CLIENT_ID=""
+ENV OMNI_AUTH_AUTH0_CLIENT_SECRET=""
+ENV OMNI_AUTH_SAML_ENABLED=false
+ENV OMNI_AUTH_SAML_URL=""
+ENV OMNI_AUTH_OIDC_ENABLED=false
+ENV OMNI_AUTH_OIDC_PROVIDER_URL=""
+ENV OMNI_AUTH_OIDC_CLIENT_ID=""
+ENV OMNI_AUTH_OIDC_CLIENT_SECRET=""
+ENV OMNI_AUTH_OIDC_LOGOUT_URL=""
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \

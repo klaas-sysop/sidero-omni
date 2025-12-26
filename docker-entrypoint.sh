@@ -126,6 +126,8 @@ validate_auth_config() {
     local oidc_enabled=$(normalize_boolean "${OIDC_ENABLED:-${OMNI_AUTH_OIDC_ENABLED:-false}}")
     
     # Export normalized values (this ensures proper boolean format for Omni)
+    # These exports override any Dockerfile ENV defaults and docker-compose.yml values
+    # They will be available to Omni when it starts
     export OMNI_AUTH_AUTH0_ENABLED="$auth0_enabled"
     export OMNI_AUTH_SAML_ENABLED="$saml_enabled"
     export OMNI_AUTH_OIDC_ENABLED="$oidc_enabled"
@@ -436,14 +438,27 @@ main() {
     log_info "=== Sidero Omni - Container Startup ==="
     log_info "Entrypoint script version: $(date +%s)"
     
+    # Debug: Show OMNI_AUTH_* variables from Dockerfile ENV (before any script modifications)
+    log_info "OMNI_AUTH_* variables from Dockerfile ENV (initial state):"
+    env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
+        # Mask sensitive values
+        if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
+            log_info "  ${line%%=*}=<masked>"
+        else
+            log_info "  $line"
+        fi
+    done || true
+    
     # Validate environment
     validate_env
     
     # Validate and normalize authentication configuration
+    # This will override Dockerfile ENV defaults with values from docker-compose.yml
     validate_auth_config
     
     # Debug: Show all OMNI_AUTH_* environment variables after normalization
-    log_info "Final OMNI_AUTH_* environment variables:"
+    # These values override Dockerfile ENV defaults and will be passed to Omni
+    log_info "OMNI_AUTH_* environment variables after validation/normalization (override Dockerfile ENV):"
     env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
         # Mask sensitive values
         if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
@@ -769,12 +784,14 @@ main() {
             
             # Ensure all authentication variables are explicitly exported one more time before exec
             # This guarantees they're in the environment when Omni starts
+            # These exports override Dockerfile ENV defaults and docker-compose.yml values
             export OMNI_AUTH_AUTH0_ENABLED="$final_auth0_check"
             export OMNI_AUTH_SAML_ENABLED="$final_saml_check"
             export OMNI_AUTH_OIDC_ENABLED="$final_oidc_check"
             
             # Re-export all auth configuration values to ensure they're available to Omni
             # This is critical because exec replaces the process and we need to guarantee env vars are set
+            # These values override Dockerfile ENV defaults and will be inherited by Omni via exec
             if [ "$final_auth0_check" = "true" ]; then
                 export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
@@ -830,13 +847,16 @@ main() {
             fi
             
             # Execute Omni - exec will preserve all exported environment variables
-            # All OMNI_AUTH_* variables have been exported above
+            # All OMNI_AUTH_* variables have been exported above and will be inherited by Omni
+            # Variable precedence: entrypoint exports (highest) > docker-compose.yml > Dockerfile ENV (lowest)
+            log_info "=== Ready to execute Omni ==="
+            log_info "Environment variable precedence: Entrypoint exports (highest) > docker-compose.yml > Dockerfile ENV (lowest)"
             if [ ${#omni_args[@]} -gt 0 ]; then
-                log_info "Executing Omni (environment variables should be inherited by exec)"
+                log_info "Executing Omni with arguments (all OMNI_AUTH_* variables exported and ready)"
                 exec "$omni_path" "${omni_args[@]}"
             else
                 log_warn "No command-line arguments provided, Omni may fail due to missing configuration"
-                log_info "Executing Omni (environment variables should be inherited by exec)"
+                log_info "Executing Omni (all OMNI_AUTH_* variables exported and ready)"
                 exec "$omni_path"
             fi
         else
