@@ -302,49 +302,115 @@ main() {
     if [ $# -eq 0 ]; then
         log_info "No command provided, searching for omni binary..."
         
-        # Try common locations for the omni binary
         local omni_path=""
         
-        # Check common binary locations
-        for path in "/usr/bin/omni" "/usr/local/bin/omni" "/bin/omni" "/sbin/omni"; do
+        # Step 1: Check common binary locations (most likely first)
+        log_info "Checking standard binary locations..."
+        for path in "/usr/bin/omni" "/usr/local/bin/omni" "/bin/omni" "/sbin/omni" "/usr/sbin/omni"; do
             if [ -f "$path" ] && [ -x "$path" ]; then
                 omni_path="$path"
+                log_info "Found omni binary at: $path"
                 break
             fi
         done
         
-        # If not found, try to find it in PATH
+        # Step 2: Try to find it in PATH
         if [ -z "$omni_path" ]; then
+            log_info "Checking PATH..."
             if command -v omni >/dev/null 2>&1; then
                 omni_path="omni"
+                log_info "Found omni in PATH"
             fi
         fi
         
-        # If still not found, search more broadly
+        # Step 3: Search in common system directories
         if [ -z "$omni_path" ]; then
-            log_info "Searching for omni binary in filesystem..."
-            # Search in common locations including workspace
-            omni_path=$(find /usr /bin /sbin /opt /workspace /app -name "omni" -type f -executable 2>/dev/null | head -n 1)
+            log_info "Searching common system directories..."
+            omni_path=$(find /usr /bin /sbin /opt /workspace /app /root -name "omni" -type f -executable 2>/dev/null | head -n 1)
+            if [ -n "$omni_path" ]; then
+                log_info "Found omni binary at: $omni_path"
+            fi
         fi
         
-        # Check if there's an omni executable in the current directory
+        # Step 4: Check current directory
         if [ -z "$omni_path" ] && [ -f "./omni" ] && [ -x "./omni" ]; then
             omni_path="./omni"
+            log_info "Found omni binary in current directory"
+        fi
+        
+        # Step 5: Comprehensive filesystem search (excluding virtual filesystems)
+        if [ -z "$omni_path" ]; then
+            log_info "Performing comprehensive filesystem search..."
+            # Search root filesystem but exclude /proc, /sys, /dev, /tmp, and other virtual filesystems
+            omni_path=$(find / -maxdepth 10 -name "omni" -type f -executable \
+                ! -path "/proc/*" \
+                ! -path "/sys/*" \
+                ! -path "/dev/*" \
+                ! -path "/tmp/*" \
+                ! -path "/run/*" \
+                ! -path "/var/run/*" \
+                ! -path "/var/tmp/*" \
+                2>/dev/null | head -n 1)
+            if [ -n "$omni_path" ]; then
+                log_info "Found omni binary at: $omni_path"
+            fi
+        fi
+        
+        # Step 6: Check if base image has a default command we can use
+        if [ -z "$omni_path" ]; then
+            log_info "Checking for base image default command..."
+            # Check if there's an omni-related executable or script
+            # Some base images might have the binary with a different name or in a wrapper
+            for alt_name in "omni-controller" "omni-server" "omni-service"; do
+                if command -v "$alt_name" >/dev/null 2>&1; then
+                    omni_path="$alt_name"
+                    log_info "Found alternative omni executable: $alt_name"
+                    break
+                fi
+            done
+        fi
+        
+        # Step 7: Try to use the base image's original entrypoint if available
+        if [ -z "$omni_path" ]; then
+            log_info "Attempting to use base image's original entrypoint..."
+            # Check for common entrypoint patterns in the base image
+            # The base image might have set a default command via environment or script
+            if [ -n "${OMNI_CMD:-}" ]; then
+                log_info "Found OMNI_CMD environment variable: ${OMNI_CMD}"
+                omni_path="${OMNI_CMD}"
+            elif [ -f "/entrypoint.sh" ] && [ -x "/entrypoint.sh" ]; then
+                log_info "Found base image entrypoint script, executing it..."
+                exec /entrypoint.sh
+            fi
         fi
         
         if [ -n "$omni_path" ]; then
-            log_info "Found omni binary at: $omni_path"
+            log_success "Found omni binary at: $omni_path"
             log_info "Starting Omni..."
             exec "$omni_path"
         else
             log_error "No command provided and omni binary not found"
-            log_error "Searched in: /usr/bin, /usr/local/bin, /bin, /sbin, /opt, /workspace, /app, and PATH"
+            log_error ""
+            log_error "Searched locations:"
+            log_error "  - Standard paths: /usr/bin, /usr/local/bin, /bin, /sbin, /usr/sbin"
+            log_error "  - PATH environment variable"
+            log_error "  - Common directories: /usr, /bin, /sbin, /opt, /workspace, /app, /root"
+            log_error "  - Current directory (./omni)"
+            log_error "  - Comprehensive filesystem search (excluding virtual filesystems)"
+            log_error "  - Alternative names: omni-controller, omni-server, omni-service"
+            log_error "  - Base image entrypoint scripts"
             log_error ""
             log_error "The base image 'ghcr.io/siderolabs/omni:latest' may use a different startup mechanism."
-            log_error "Please check the Omni documentation or specify the command explicitly:"
-            log_error "  - Add 'command: [your-omni-command]' to docker-compose.yml"
-            log_error "  - Or set CMD in the Dockerfile"
-            log_error "  - Or pass a command when running: docker run ... your-image your-command"
+            log_error ""
+            log_error "Possible solutions:"
+            log_error "  1. Inspect the base image to find the omni binary location:"
+            log_error "     docker run --rm --entrypoint /bin/sh ghcr.io/siderolabs/omni:latest -c 'find / -name omni -type f 2>/dev/null'"
+            log_error "  2. Check the base image's default CMD/ENTRYPOINT:"
+            log_error "     docker inspect ghcr.io/siderolabs/omni:latest | grep -A 5 -E '(Cmd|Entrypoint)'"
+            log_error "  3. Specify the command explicitly in docker-compose.yml:"
+            log_error "     command: ['/path/to/omni']"
+            log_error "  4. Or pass a command when running:"
+            log_error "     docker run ... your-image /path/to/omni"
             exit 1
         fi
     else

@@ -28,6 +28,10 @@ RUN chmod +x /scripts/generate-gpg-key.sh
 # Final stage: use omni base image
 FROM ghcr.io/siderolabs/omni:latest
 
+# Note: We preserve the base image's structure and binaries.
+# The omni binary from the base image should remain intact.
+# We only add additional tools (bash, curl, etc.) from the builder stage.
+
 # Copy bash and runtime libraries from builder
 COPY --from=builder /bin/bash /bin/bash
 COPY --from=builder /bin/sh /bin/sh
