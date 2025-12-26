@@ -28,19 +28,19 @@ WORKSPACE_DIR="/workspace"
 #############################################################################
 
 log_info() {
-    echo -e "${BLUE}[OMNI]${NC} ℹ $1"
+    echo -e "${BLUE}[OMNI]${NC} ℹ $1" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}[OMNI]${NC} ✓ $1"
+    echo -e "${GREEN}[OMNI]${NC} ✓ $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}[OMNI]${NC} ✗ $1"
+    echo -e "${RED}[OMNI]${NC} ✗ $1" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[OMNI]${NC} ⚠ $1"
+    echo -e "${YELLOW}[OMNI]${NC} ⚠ $1" >&2
 }
 
 # Validate required environment variables
@@ -371,6 +371,9 @@ init_data_dirs() {
 #############################################################################
 
 main() {
+    # Force output to stderr so it shows in logs even if stdout is redirected
+    exec >&2
+    
     log_info "=== Sidero Omni - Container Startup ==="
     log_info "Entrypoint script version: $(date +%s)"
     
@@ -389,7 +392,7 @@ main() {
         else
             log_info "  $line"
         fi
-    done
+    done || true
     
     # Initialize data directories
     init_data_dirs
