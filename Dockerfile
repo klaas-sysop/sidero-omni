@@ -43,6 +43,7 @@ COPY --from=builder /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 COPY --from=builder /lib64 /lib64
 COPY --from=builder /etc/ssl /etc/ssl
 COPY --from=builder /usr/share/ca-certificates /usr/share/ca-certificates
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
 # Copy scripts and tools from builder
 COPY --from=builder /scripts /scripts
