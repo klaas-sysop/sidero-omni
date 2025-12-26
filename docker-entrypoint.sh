@@ -404,28 +404,44 @@ main() {
             
             log_info "Starting Omni..."
             
+            # Debug: Log environment variables
+            log_info "OMNI_SQLITE_STORAGE_PATH=${OMNI_SQLITE_STORAGE_PATH:-<not set>}"
+            log_info "OMNI_PRIVATE_KEY_SOURCE=${OMNI_PRIVATE_KEY_SOURCE:-<not set>}"
+            
             # Build command arguments
             local omni_args=()
             
             # Add SQLite storage path if specified
+            # Error message explicitly mentions: --sqlite-storage-path flag
             if [ -n "${OMNI_SQLITE_STORAGE_PATH:-}" ]; then
                 omni_args+=("--sqlite-storage-path" "${OMNI_SQLITE_STORAGE_PATH}")
-                log_info "Using SQLite storage path: ${OMNI_SQLITE_STORAGE_PATH}"
+                log_info "Added SQLite storage path argument: --sqlite-storage-path ${OMNI_SQLITE_STORAGE_PATH}"
+            else
+                log_warn "OMNI_SQLITE_STORAGE_PATH not set, Omni will fail to start"
             fi
             
             # Add etcd private key source if specified (for GPG-encrypted etcd)
+            # Error shows: Params.Storage.Default.Etcd.PrivateKeySource
+            # Try common flag name variations
             if [ -n "${OMNI_PRIVATE_KEY_SOURCE:-}" ]; then
-                # Remove file:// prefix if present, as Omni might expect just the path
+                # Remove file:// prefix if present
                 local key_path="${OMNI_PRIVATE_KEY_SOURCE#file://}"
-                # Try different possible flag names
-                omni_args+=("--etcd-private-key-source" "${key_path}")
-                log_info "Using etcd private key source: ${key_path}"
+                # Try the most likely flag name based on error structure
+                # Params.Storage.Default.Etcd.PrivateKeySource -> --storage-default-etcd-private-key-source
+                omni_args+=("--storage-default-etcd-private-key-source" "${key_path}")
+                log_info "Added etcd private key source argument: --storage-default-etcd-private-key-source ${key_path}"
+            else
+                log_warn "OMNI_PRIVATE_KEY_SOURCE not set, Omni will fail to start"
             fi
+            
+            # Log the final command
+            log_info "Executing: $omni_path ${omni_args[*]}"
             
             # Execute omni with arguments
             if [ ${#omni_args[@]} -gt 0 ]; then
                 exec "$omni_path" "${omni_args[@]}"
             else
+                log_warn "No command-line arguments provided, Omni may fail due to missing configuration"
                 exec "$omni_path"
             fi
         else
