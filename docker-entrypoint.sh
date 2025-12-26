@@ -773,10 +773,42 @@ main() {
             export OMNI_AUTH_SAML_ENABLED="$final_saml_check"
             export OMNI_AUTH_OIDC_ENABLED="$final_oidc_check"
             
+            # Re-export all auth configuration values to ensure they're available to Omni
+            # This is critical because exec replaces the process and we need to guarantee env vars are set
+            if [ "$final_auth0_check" = "true" ]; then
+                export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
+                export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
+                if [ -n "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}" ]; then
+                    export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
+                fi
+            fi
+            if [ "$final_saml_check" = "true" ]; then
+                export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
+            fi
+            if [ "$final_oidc_check" = "true" ]; then
+                export OMNI_AUTH_OIDC_PROVIDER_URL="${OMNI_AUTH_OIDC_PROVIDER_URL:-${OIDC_PROVIDER_URL:-}}"
+                export OMNI_AUTH_OIDC_CLIENT_ID="${OMNI_AUTH_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:-}}"
+                export OMNI_AUTH_OIDC_CLIENT_SECRET="${OMNI_AUTH_OIDC_CLIENT_SECRET:-${OIDC_CLIENT_SECRET:-}}"
+                if [ -n "${OMNI_AUTH_OIDC_LOGOUT_URL:-${OIDC_LOGOUT_URL:-}}" ]; then
+                    export OMNI_AUTH_OIDC_LOGOUT_URL="${OMNI_AUTH_OIDC_LOGOUT_URL:-${OIDC_LOGOUT_URL:-}}"
+                fi
+            fi
+            
             # Execute omni with arguments
             # Use exec to replace the shell process, ensuring all exported environment variables are passed
             log_info "About to execute Omni with environment variables exported"
             log_info "Final authentication status - Auth0: $final_auth0_check, SAML: $final_saml_check, OIDC: $final_oidc_check"
+            
+            # Debug: Log all OMNI_AUTH_* variables one final time before exec
+            log_info "Final OMNI_AUTH_* environment variables before exec:"
+            env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
+                # Mask sensitive values
+                if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
+                    log_info "  ${line%%=*}=<masked>"
+                else
+                    log_info "  $line"
+                fi
+            done || true
             if [ ${#omni_args[@]} -gt 0 ]; then
                 exec "$omni_path" "${omni_args[@]}"
             else
