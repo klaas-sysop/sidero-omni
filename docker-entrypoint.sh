@@ -423,8 +423,13 @@ main() {
             
             # Add etcd private key source (required for GPG-encrypted etcd)
             # Error shows: Params.Storage.Default.Etcd.PrivateKeySource
-            # Remove file:// prefix if present
             local key_path="${private_key_source#file://}"
+            local key_path_with_prefix="file://${key_path}"
+            
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_h2a\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:428\",\"message\":\"Testing key path formats\",\"data\":{\"original\":\"${private_key_source}\",\"without_prefix\":\"${key_path}\",\"with_prefix\":\"${key_path_with_prefix}\",\"hypothesis\":\"H2a: Need file:// prefix\"},\"sessionId\":\"debug-session\",\"runId\":\"run2\",\"hypothesisId\":\"H2a\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
             
             # Verify the key file exists
             if [ ! -f "$key_path" ]; then
@@ -432,6 +437,18 @@ main() {
                 log_error "Expected from OMNI_PRIVATE_KEY_SOURCE: ${private_key_source}"
                 exit 1
             fi
+            
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_h2b\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:438\",\"message\":\"File exists check\",\"data\":{\"key_path\":\"${key_path}\",\"file_exists\":true,\"file_size\":$(stat -c%s "$key_path" 2>/dev/null || echo 0),\"file_perms\":\"$(stat -c%a "$key_path" 2>/dev/null || echo unknown)\",\"hypothesis\":\"H2b: File format/permissions\"},\"sessionId\":\"debug-session\",\"runId\":\"run2\",\"hypothesisId\":\"H2b\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
+            
+            # Check file content (first few lines to see if it's a valid GPG key)
+            local file_header=$(head -n 1 "$key_path" 2>/dev/null || echo "")
+            # #region agent log
+            mkdir -p /workspace/.cursor 2>/dev/null || true
+            echo "{\"id\":\"log_$(date +%s)_h2c\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:443\",\"message\":\"File content check\",\"data\":{\"first_line\":\"${file_header:0:50}\",\"starts_with_begin\":$(echo "$file_header" | grep -q "^-----BEGIN" && echo true || echo false),\"hypothesis\":\"H2c: File content validation\"},\"sessionId\":\"debug-session\",\"runId\":\"run2\",\"hypothesisId\":\"H2c\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+            # #endregion
             
             # Try different flag name variations based on Go CLI conventions
             # The error structure is: Params.Storage.Default.Etcd.PrivateKeySource
@@ -493,7 +510,8 @@ main() {
                 if echo "$help_output" | grep -q "$flag" 2>/dev/null || \
                    "$omni_path" "$flag" "${key_path}" --help >/dev/null 2>&1; then
                     log_info "Flag ${flag} appears to be valid"
-                    omni_args+=("$flag" "${key_path}")
+                    # Try with file:// prefix first (hypothesis H2a)
+                    omni_args+=("$flag" "${key_path_with_prefix}")
                     flag_found=true
                     # #region agent log
                     mkdir -p /workspace/.cursor 2>/dev/null || true
@@ -512,11 +530,15 @@ main() {
                 log_warn "No valid flag found, will try environment variables only (hypothesis H2)"
                 # #region agent log
                 mkdir -p /workspace/.cursor 2>/dev/null || true
-                echo "{\"id\":\"log_$(date +%s)_h2\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:485\",\"message\":\"No flag found, using env vars\",\"data\":{\"hypothesis\":\"H2: Environment variables only\",\"env_vars\":[\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\",\"OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE\"]},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"H2\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                echo "{\"id\":\"log_$(date +%s)_h2\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:485\",\"message\":\"No flag found, using env vars\",\"data\":{\"hypothesis\":\"H2: Environment variables only\",\"env_vars\":[\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\",\"OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE\"]},\"sessionId\":\"debug-session\",\"runId\":\"run2\",\"hypothesisId\":\"H2\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
                 # #endregion
                 # Don't add flag, rely on environment variables
             else
-                log_info "Using etcd private key source (flag: ${omni_args[-2]}): ${key_path}"
+                log_info "Using etcd private key source (flag: ${omni_args[-2]}): ${omni_args[-1]}"
+                # #region agent log
+                mkdir -p /workspace/.cursor 2>/dev/null || true
+                echo "{\"id\":\"log_$(date +%s)_final\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:503\",\"message\":\"Final key path format\",\"data\":{\"flag\":\"${omni_args[-2]}\",\"key_path_value\":\"${omni_args[-1]}\",\"has_file_prefix\":$(echo "${omni_args[-1]}" | grep -q "^file://" && echo true || echo false),\"hypothesis\":\"H2a: Testing file:// prefix\"},\"sessionId\":\"debug-session\",\"runId\":\"run2\",\"hypothesisId\":\"H2a\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
+                # #endregion
             fi
             
             # Log the final command
