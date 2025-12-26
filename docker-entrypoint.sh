@@ -386,8 +386,48 @@ main() {
         
         if [ -n "$omni_path" ]; then
             log_success "Found omni binary at: $omni_path"
+            
+            # Verify GPG key file exists if private key source is configured
+            if [ -n "${OMNI_PRIVATE_KEY_SOURCE:-}" ]; then
+                local key_path="${OMNI_PRIVATE_KEY_SOURCE#file://}"
+                if [ ! -f "$key_path" ]; then
+                    log_error "GPG key file not found at: $key_path"
+                    log_error "Expected file from OMNI_PRIVATE_KEY_SOURCE: ${OMNI_PRIVATE_KEY_SOURCE}"
+                    exit 1
+                fi
+                if [ ! -r "$key_path" ]; then
+                    log_error "GPG key file is not readable: $key_path"
+                    exit 1
+                fi
+                log_info "Verified GPG key file exists and is readable: $key_path"
+            fi
+            
             log_info "Starting Omni..."
-            exec "$omni_path"
+            
+            # Build command arguments
+            local omni_args=()
+            
+            # Add SQLite storage path if specified
+            if [ -n "${OMNI_SQLITE_STORAGE_PATH:-}" ]; then
+                omni_args+=("--sqlite-storage-path" "${OMNI_SQLITE_STORAGE_PATH}")
+                log_info "Using SQLite storage path: ${OMNI_SQLITE_STORAGE_PATH}"
+            fi
+            
+            # Add etcd private key source if specified (for GPG-encrypted etcd)
+            if [ -n "${OMNI_PRIVATE_KEY_SOURCE:-}" ]; then
+                # Remove file:// prefix if present, as Omni might expect just the path
+                local key_path="${OMNI_PRIVATE_KEY_SOURCE#file://}"
+                # Try different possible flag names
+                omni_args+=("--etcd-private-key-source" "${key_path}")
+                log_info "Using etcd private key source: ${key_path}"
+            fi
+            
+            # Execute omni with arguments
+            if [ ${#omni_args[@]} -gt 0 ]; then
+                exec "$omni_path" "${omni_args[@]}"
+            else
+                exec "$omni_path"
+            fi
         else
             log_error "No command provided and omni binary not found"
             log_error ""

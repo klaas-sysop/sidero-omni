@@ -46,6 +46,9 @@ services:
       # Private Key (GPG encrypted etcd)
       - OMNI_PRIVATE_KEY_SOURCE=file:///etc/omni/tls/omni.asc
       
+      # Storage Configuration
+      - OMNI_SQLITE_STORAGE_PATH=/_out/omni.db
+      
       # Authentication - Choose one or more below
       # Auth0
       - OMNI_AUTH_AUTH0_ENABLED=${AUTH0_ENABLED:-false}
@@ -79,8 +82,8 @@ services:
       - ./certs/tls.crt:/etc/omni/tls/tls.crt:ro
       - ./certs/tls.key:/etc/omni/tls/tls.key:ro
       
-      # GPG Key for etcd encryption
-      - ./certs/omni.asc:/etc/omni/omni.asc:ro
+      # GPG Key for etcd encryption (generated in container, mounted for persistence)
+      - ./certs/omni.asc:/etc/omni/tls/omni.asc:rw
     
     ports:
       - "443:443"
