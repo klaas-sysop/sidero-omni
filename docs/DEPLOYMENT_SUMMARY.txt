@@ -1,23 +1,5 @@
-================================================================================
-SIDERO OMNI - ONE-CLICK DOCKER DEPLOYMENT
-================================================================================
-
-CREATED FILES:
-==============
-
-Core Docker Files:
-  ✓ Dockerfile                    - Custom image with cert generation
-  ✓ docker-compose.yml            - Updated to use Dockerfile
-  ✓ docker-entrypoint.sh          - Auto-setup startup script
-  ✓ generate-certs.sh             - Certificate generation helper
-  ✓ generate-gpg-key.sh           - GPG key generation helper
-
-Configuration:
-  ✓ .env.example                  - Configuration template (with cert options)
-
-Documentation:
-  ✓ README.md                     - Main documentation (complete rewrite)
-  ✓ DOCKERFILE_QUICKREF.md        - 2-minute quick reference
+This file is deprecated. Full guides are in the repository root README and the `docs/` folder.
+See `README.md` and `docs/` for the deployment guides and Dokploy instructions.
   ✓ DOCKERFILE_GUIDE.md           - Complete Dockerfile guide
   ✓ DEPLOYMENT_GUIDE.md           - General deployment guide
   ✓ DOKPLOY_DEPLOYMENT.md         - Dokploy-specific instructions

@@ -58,16 +58,16 @@ That's it! SSL certificates, GPG keys, and Omni service all start automatically.
 Choose your deployment path:
 
 ### 🎯 Just Want to Deploy?
-→ Read **[DOCKERFILE_QUICKREF.md](DOCKERFILE_QUICKREF.md)** (2 minutes)
+→ Read **[DOCKERFILE_QUICKREF.md](docs/DOCKERFILE_QUICKREF.md)** (2 minutes)
 
 ### 🏗️ Self-Hosted on Linux
-→ Read **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** (10 minutes)
+→ Read **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** (10 minutes)
 
 ### 🐳 Using Docker & Dockerfile
-→ Read **[DOCKERFILE_GUIDE.md](DOCKERFILE_GUIDE.md)** (detailed reference)
+→ Read **[DOCKERFILE_GUIDE.md](docs/DOCKERFILE_GUIDE.md)** (detailed reference)
 
 ### ☁️ Deploying on Dokploy
-→ Read **[DOKPLOY_DEPLOYMENT.md](DOKPLOY_DEPLOYMENT.md)** (step-by-step)
+→ Read **[DOKPLOY_DEPLOYMENT.md](docs/DOKPLOY_DEPLOYMENT.md)** (step-by-step)
 
 ---
 
