@@ -300,23 +300,56 @@ main() {
     # Start Omni with provided arguments or defaults
     # If no arguments provided, try to find and execute the omni binary
     if [ $# -eq 0 ]; then
+        log_info "No command provided, searching for omni binary..."
+        
         # Try common locations for the omni binary
-        if [ -f "/usr/bin/omni" ]; then
-            log_info "Starting Omni from /usr/bin/omni"
-            exec /usr/bin/omni
-        elif [ -f "/usr/local/bin/omni" ]; then
-            log_info "Starting Omni from /usr/local/bin/omni"
-            exec /usr/local/bin/omni
-        elif command -v omni >/dev/null 2>&1; then
-            log_info "Starting Omni from PATH"
-            exec omni
+        local omni_path=""
+        
+        # Check common binary locations
+        for path in "/usr/bin/omni" "/usr/local/bin/omni" "/bin/omni" "/sbin/omni"; do
+            if [ -f "$path" ] && [ -x "$path" ]; then
+                omni_path="$path"
+                break
+            fi
+        done
+        
+        # If not found, try to find it in PATH
+        if [ -z "$omni_path" ]; then
+            if command -v omni >/dev/null 2>&1; then
+                omni_path="omni"
+            fi
+        fi
+        
+        # If still not found, search more broadly
+        if [ -z "$omni_path" ]; then
+            log_info "Searching for omni binary in filesystem..."
+            # Search in common locations including workspace
+            omni_path=$(find /usr /bin /sbin /opt /workspace /app -name "omni" -type f -executable 2>/dev/null | head -n 1)
+        fi
+        
+        # Check if there's an omni executable in the current directory
+        if [ -z "$omni_path" ] && [ -f "./omni" ] && [ -x "./omni" ]; then
+            omni_path="./omni"
+        fi
+        
+        if [ -n "$omni_path" ]; then
+            log_info "Found omni binary at: $omni_path"
+            log_info "Starting Omni..."
+            exec "$omni_path"
         else
             log_error "No command provided and omni binary not found"
-            log_error "Please provide a command or ensure omni is in PATH"
+            log_error "Searched in: /usr/bin, /usr/local/bin, /bin, /sbin, /opt, /workspace, /app, and PATH"
+            log_error ""
+            log_error "The base image 'ghcr.io/siderolabs/omni:latest' may use a different startup mechanism."
+            log_error "Please check the Omni documentation or specify the command explicitly:"
+            log_error "  - Add 'command: [your-omni-command]' to docker-compose.yml"
+            log_error "  - Or set CMD in the Dockerfile"
+            log_error "  - Or pass a command when running: docker run ... your-image your-command"
             exit 1
         fi
     else
         # Execute provided command
+        log_info "Executing provided command: $*"
         exec "$@"
     fi
 }

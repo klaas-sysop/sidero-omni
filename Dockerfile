@@ -62,3 +62,7 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
 # Use our custom entrypoint
 # The entrypoint script will handle finding and executing omni if no command is provided
 ENTRYPOINT ["/bin/bash", "/scripts/entrypoint.sh"]
+
+# Default command - will be overridden by docker-compose or docker run
+# The entrypoint will try to find and execute omni if no command is provided
+CMD []
