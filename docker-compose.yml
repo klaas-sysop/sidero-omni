@@ -50,16 +50,26 @@ services:
       - OMNI_SQLITE_STORAGE_PATH=/_out/omni.db
       
       # Authentication - Choose one or more below
-      # Auth0
+      # Auth0 (pass through original vars for validation script, then set OMNI_AUTH_* vars)
+      - AUTH0_ENABLED=${AUTH0_ENABLED:-false}
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
       - OMNI_AUTH_AUTH0_ENABLED=${AUTH0_ENABLED:-false}
       - OMNI_AUTH_AUTH0_DOMAIN=${AUTH0_DOMAIN}
       - OMNI_AUTH_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
       
       # SAML
+      - SAML_ENABLED=${SAML_ENABLED:-false}
+      - SAML_URL=${SAML_URL}
       - OMNI_AUTH_SAML_ENABLED=${SAML_ENABLED:-false}
       - OMNI_AUTH_SAML_URL=${SAML_URL}
       
       # OIDC
+      - OIDC_ENABLED=${OIDC_ENABLED:-false}
+      - OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OIDC_LOGOUT_URL=${OIDC_LOGOUT_URL}
       - OMNI_AUTH_OIDC_ENABLED=${OIDC_ENABLED:-false}
       - OMNI_AUTH_OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
       - OMNI_AUTH_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
