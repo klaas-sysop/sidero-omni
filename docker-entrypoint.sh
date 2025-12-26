@@ -74,6 +74,93 @@ validate_env() {
     log_success "All required environment variables are set"
 }
 
+# Normalize boolean environment variable values
+# Converts "true", "True", "TRUE", "1" to "true", everything else to "false"
+normalize_boolean() {
+    local value="${1:-}"
+    case "${value,,}" in
+        true|1|yes|on|enabled)
+            echo "true"
+            ;;
+        *)
+            echo "false"
+            ;;
+    esac
+}
+
+# Validate authentication configuration
+validate_auth_config() {
+    log_info "Validating authentication configuration..."
+    
+    # Normalize boolean values for authentication methods
+    # Read from OMNI_AUTH_* variables that docker-compose sets from .env file
+    local auth0_enabled=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
+    local saml_enabled=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
+    local oidc_enabled=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
+    
+    # Export normalized values (this ensures proper boolean format for Omni)
+    export OMNI_AUTH_AUTH0_ENABLED="$auth0_enabled"
+    export OMNI_AUTH_SAML_ENABLED="$saml_enabled"
+    export OMNI_AUTH_OIDC_ENABLED="$oidc_enabled"
+    
+    # Log authentication status
+    log_info "Authentication methods:"
+    log_info "  - Auth0: $auth0_enabled"
+    log_info "  - SAML: $saml_enabled"
+    log_info "  - OIDC: $oidc_enabled"
+    
+    # Check if at least one authentication method is enabled
+    if [ "$auth0_enabled" != "true" ] && [ "$saml_enabled" != "true" ] && [ "$oidc_enabled" != "true" ]; then
+        log_error "No authentication method is enabled"
+        log_error "Please enable at least one authentication method:"
+        log_error "  - Set AUTH0_ENABLED=true with AUTH0_DOMAIN and AUTH0_CLIENT_ID"
+        log_error "  - Set SAML_ENABLED=true with SAML_URL"
+        log_error "  - Set OIDC_ENABLED=true with OIDC_PROVIDER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET"
+        exit 1
+    fi
+    
+    # Validate Auth0 configuration if enabled
+    if [ "$auth0_enabled" = "true" ]; then
+        if [ -z "${OMNI_AUTH_AUTH0_DOMAIN:-}" ]; then
+            log_error "AUTH0_ENABLED=true but AUTH0_DOMAIN is not set"
+            exit 1
+        fi
+        if [ -z "${OMNI_AUTH_AUTH0_CLIENT_ID:-}" ]; then
+            log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_ID is not set"
+            exit 1
+        fi
+        log_success "Auth0 configuration is valid (Domain: ${OMNI_AUTH_AUTH0_DOMAIN}, Client ID: ${OMNI_AUTH_AUTH0_CLIENT_ID})"
+    fi
+    
+    # Validate SAML configuration if enabled
+    if [ "$saml_enabled" = "true" ]; then
+        if [ -z "${OMNI_AUTH_SAML_URL:-}" ]; then
+            log_error "SAML_ENABLED=true but SAML_URL is not set"
+            exit 1
+        fi
+        log_success "SAML configuration is valid (URL: ${OMNI_AUTH_SAML_URL})"
+    fi
+    
+    # Validate OIDC configuration if enabled
+    if [ "$oidc_enabled" = "true" ]; then
+        if [ -z "${OMNI_AUTH_OIDC_PROVIDER_URL:-}" ]; then
+            log_error "OIDC_ENABLED=true but OIDC_PROVIDER_URL is not set"
+            exit 1
+        fi
+        if [ -z "${OMNI_AUTH_OIDC_CLIENT_ID:-}" ]; then
+            log_error "OIDC_ENABLED=true but OIDC_CLIENT_ID is not set"
+            exit 1
+        fi
+        if [ -z "${OMNI_AUTH_OIDC_CLIENT_SECRET:-}" ]; then
+            log_error "OIDC_ENABLED=true but OIDC_CLIENT_SECRET is not set"
+            exit 1
+        fi
+        log_success "OIDC configuration is valid (Provider: ${OMNI_AUTH_OIDC_PROVIDER_URL})"
+    fi
+    
+    log_success "Authentication configuration is valid"
+}
+
 # Check if certificates exist and are valid
 check_certificates() {
     log_info "Checking SSL certificates..."
@@ -259,6 +346,9 @@ main() {
     
     # Validate environment
     validate_env
+    
+    # Validate and normalize authentication configuration
+    validate_auth_config
     
     # Initialize data directories
     init_data_dirs
