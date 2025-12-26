@@ -145,20 +145,6 @@ validate_auth_config() {
         export OMNI_AUTH_OIDC_ENABLED="false"
     fi
     
-    # Final check: ensure at least one authentication method is enabled
-    local final_auth0=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
-    local final_saml=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
-    local final_oidc=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
-    
-    if [ "$final_auth0" != "true" ] && [ "$final_saml" != "true" ] && [ "$final_oidc" != "true" ]; then
-        log_error "No authentication method is enabled"
-        log_error "Please enable at least one authentication method:"
-        log_error "  - Set AUTH0_ENABLED=true with AUTH0_DOMAIN and AUTH0_CLIENT_ID"
-        log_error "  - Set SAML_ENABLED=true with SAML_URL (non-placeholder)"
-        log_error "  - Set OIDC_ENABLED=true with OIDC_PROVIDER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET (non-placeholder)"
-        exit 1
-    fi
-    
     # Validate Auth0 configuration if enabled
     if [ "$auth0_enabled" = "true" ]; then
         # Check both original and OMNI_AUTH_* variable names
@@ -241,6 +227,23 @@ validate_auth_config() {
                 export OMNI_AUTH_OIDC_LOGOUT_URL="${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}"
             fi
         fi
+    fi
+    
+    # Final check: ensure at least one authentication method is enabled
+    # This check happens AFTER validation, so if all methods were disabled due to invalid config,
+    # we'll catch it here and exit with an error
+    local final_auth0=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
+    local final_saml=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
+    local final_oidc=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
+    
+    if [ "$final_auth0" != "true" ] && [ "$final_saml" != "true" ] && [ "$final_oidc" != "true" ]; then
+        log_error "No authentication method is enabled"
+        log_error "All authentication methods were either disabled or had invalid configuration."
+        log_error "Please enable at least one authentication method with valid configuration:"
+        log_error "  - Set AUTH0_ENABLED=true with AUTH0_DOMAIN and AUTH0_CLIENT_ID (non-placeholder values)"
+        log_error "  - Set SAML_ENABLED=true with SAML_URL (non-placeholder value)"
+        log_error "  - Set OIDC_ENABLED=true with OIDC_PROVIDER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET (non-placeholder values)"
+        exit 1
     fi
     
     log_success "Authentication configuration is valid"
