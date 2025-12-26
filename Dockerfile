@@ -34,9 +34,15 @@ COPY --from=builder /bin/sh /bin/sh
 COPY --from=builder /bin/mkdir /bin/mkdir
 COPY --from=builder /bin/chmod /bin/chmod
 COPY --from=builder /usr/bin/curl /usr/bin/curl
+# Copy essential binaries and libraries from builder
+COPY --from=builder /bin /bin
+COPY --from=builder /usr/bin /usr/bin
+COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /lib/x86_64-linux-gnu /lib/x86_64-linux-gnu
 COPY --from=builder /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 COPY --from=builder /lib64 /lib64
+COPY --from=builder /etc/ssl /etc/ssl
+COPY --from=builder /usr/share/ca-certificates /usr/share/ca-certificates
 
 # Copy scripts and tools from builder
 COPY --from=builder /scripts /scripts
