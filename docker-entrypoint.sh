@@ -161,15 +161,26 @@ EOF
 generate_self_signed_cert() {
     log_warn "Generating self-signed certificate (for testing only)"
     
-    openssl req -x509 -newkey rsa:2048 -keyout "$CERTS_DIR/tls.key" \
-        -out "$CERTS_DIR/tls.crt" -days 365 -nodes \
-        -subj "/CN=$DOMAIN_NAME" 2>/dev/null
+    # Ensure certs directory exists
+    mkdir -p "$CERTS_DIR"
     
-    if [ $? -eq 0 ]; then
+    # Generate self-signed certificate (non-interactive)
+    # Use /dev/urandom explicitly for better compatibility
+    local openssl_output
+    if openssl_output=$(openssl req -x509 -newkey rsa:2048 \
+        -keyout "$CERTS_DIR/tls.key" \
+        -out "$CERTS_DIR/tls.crt" \
+        -days 365 \
+        -nodes \
+        -subj "/CN=$DOMAIN_NAME" \
+        2>&1); then
+        chmod 644 "$CERTS_DIR/tls.crt"
+        chmod 600 "$CERTS_DIR/tls.key"
         log_warn "Self-signed certificate created (replace with valid cert for production)"
         return 0
     else
         log_error "Failed to generate self-signed certificate"
+        log_error "OpenSSL error: $openssl_output"
         return 1
     fi
 }
