@@ -372,12 +372,24 @@ init_data_dirs() {
 
 main() {
     log_info "=== Sidero Omni - Container Startup ==="
+    log_info "Entrypoint script version: $(date +%s)"
     
     # Validate environment
     validate_env
     
     # Validate and normalize authentication configuration
     validate_auth_config
+    
+    # Debug: Show all OMNI_AUTH_* environment variables after normalization
+    log_info "Final OMNI_AUTH_* environment variables:"
+    env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
+        # Mask sensitive values
+        if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
+            log_info "  ${line%%=*}=<masked>"
+        else
+            log_info "  $line"
+        fi
+    done
     
     # Initialize data directories
     init_data_dirs
@@ -662,12 +674,33 @@ main() {
             
             # Log the final command
             log_info "Executing: $omni_path ${omni_args[*]}"
+            
+            # Final check: Log all OMNI_AUTH_* variables that will be passed to Omni
+            log_info "Environment variables being passed to Omni:"
+            env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
+                # Mask sensitive values
+                if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
+                    log_info "  ${line%%=*}=<masked>"
+                else
+                    log_info "  $line"
+                fi
+            done
+            
             # #region agent log
             mkdir -p /workspace/.cursor 2>/dev/null || true
             echo "{\"id\":\"log_$(date +%s)_final\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:495\",\"message\":\"Final command execution\",\"data\":{\"omni_path\":\"${omni_path}\",\"args\":\"${omni_args[*]}\",\"env_vars\":{\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\":\"${OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"ALL\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
             # #endregion
             
+            # Final verification: Ensure authentication variables are set
+            if [ -z "${OMNI_AUTH_AUTH0_ENABLED:-}" ] && [ -z "${OMNI_AUTH_SAML_ENABLED:-}" ] && [ -z "${OMNI_AUTH_OIDC_ENABLED:-}" ]; then
+                log_error "CRITICAL: No OMNI_AUTH_*_ENABLED variables are set before executing Omni!"
+                log_error "This should not happen if validate_auth_config() ran successfully."
+                exit 1
+            fi
+            
             # Execute omni with arguments
+            # Use exec to replace the shell process, ensuring all exported environment variables are passed
+            log_info "About to execute Omni with environment variables exported"
             if [ ${#omni_args[@]} -gt 0 ]; then
                 exec "$omni_path" "${omni_args[@]}"
             else
