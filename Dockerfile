@@ -1,0 +1,38 @@
+FROM ghcr.io/siderolabs/omni:latest
+
+# Install required tools for certificate generation
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    certbot \
+    python3-certbot-dns-cloudflare \
+    openssl \
+    gnupg \
+    uuid-runtime \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories for certs and scripts
+RUN mkdir -p /etc/omni/tls /scripts
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /scripts/entrypoint.sh
+RUN chmod +x /scripts/entrypoint.sh
+
+# Copy cert generation helper script
+COPY generate-certs.sh /scripts/generate-certs.sh
+RUN chmod +x /scripts/generate-certs.sh
+
+# Copy GPG key generation helper
+COPY generate-gpg-key.sh /scripts/generate-gpg-key.sh
+RUN chmod +x /scripts/generate-gpg-key.sh
+
+# Set working directory
+WORKDIR /workspace
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
+    CMD curl -f https://localhost/health -k || exit 1
+
+# Use our custom entrypoint
+ENTRYPOINT ["/scripts/entrypoint.sh"]

@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  omni:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sidero-omni
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      # Basic Configuration
+      - OMNI_ACCOUNT_ID=${ACCOUNT_ID}
+      - OMNI_NAME=${OMNI_NAME:-onprem-omni}
+      
+      # Certificate Generation Settings
+      - ENABLE_CERT_GENERATION=${ENABLE_CERT_GENERATION:-true}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      
+      # TLS Configuration
+      - OMNI_CERT=/etc/omni/tls/tls.crt
+      - OMNI_KEY=/etc/omni/tls/tls.key
+      - OMNI_SIDEROLINK_API_CERT=/etc/omni/tls/tls.crt
+      - OMNI_SIDEROLINK_API_KEY=/etc/omni/tls/tls.key
+      
+      # API URLs
+      - OMNI_ADVERTISED_API_URL=${ADVERTISED_API_URL}
+      - OMNI_SIDEROLINK_API_ADVERTISED_URL=${SIDEROLINK_API_ADVERTISED_URL}
+      - OMNI_SIDEROLINK_WIREGUARD_ADVERTISED_ADDR=${WIREGUARD_ADVERTISED_ADDR}
+      - OMNI_ADVERTISED_KUBERNETES_PROXY_URL=${K8S_PROXY_URL}
+      
+      # Ports
+      - OMNI_BIND_ADDR=0.0.0.0:443
+      - OMNI_SIDEROLINK_API_BIND_ADDR=0.0.0.0:8090
+      - OMNI_K8S_PROXY_BIND_ADDR=0.0.0.0:8100
+      - OMNI_EVENT_SINK_PORT=8091
+      
+      # Private Key (GPG encrypted etcd)
+      - OMNI_PRIVATE_KEY_SOURCE=file:///etc/omni/tls/omni.asc
+      
+      # Authentication - Choose one or more below
+      # Auth0
+      - OMNI_AUTH_AUTH0_ENABLED=${AUTH0_ENABLED:-false}
+      - OMNI_AUTH_AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - OMNI_AUTH_AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+      
+      # SAML
+      - OMNI_AUTH_SAML_ENABLED=${SAML_ENABLED:-false}
+      - OMNI_AUTH_SAML_URL=${SAML_URL}
+      
+      # OIDC
+      - OMNI_AUTH_OIDC_ENABLED=${OIDC_ENABLED:-false}
+      - OMNI_AUTH_OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
+      - OMNI_AUTH_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - OMNI_AUTH_OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+      - OMNI_AUTH_OIDC_LOGOUT_URL=${OIDC_LOGOUT_URL}
+      
+      # Initial User
+      - OMNI_INITIAL_USERS=${INITIAL_USERS}
+      
+      # Data Directories
+      - OMNI_ETCD_DATA_DIR=${DATA_DIR:-./data}/etcd
+      - OMNI_STATE_DATA_DIR=${DATA_DIR:-./data}/state
+    
+    volumes:
+      # Data persistence
+      - omni_etcd_data:/_out/etcd
+      - omni_state:/_out
+      
+      # TLS Certificates
+      - ./certs/tls.crt:/etc/omni/tls/tls.crt:ro
+      - ./certs/tls.key:/etc/omni/tls/tls.key:ro
+      
+      # GPG Key for etcd encryption
+      - ./certs/omni.asc:/etc/omni/omni.asc:ro
+    
+    ports:
+      - "443:443"
+      - "8090:8090"
+      - "8100:8100"
+      - "8091:8091"
+      - "50180:50180/udp"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost/health", "-k"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  omni_etcd_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/etcd
+  
+  omni_state:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/state
+
+networks:
+  default:
+    name: omni-network
