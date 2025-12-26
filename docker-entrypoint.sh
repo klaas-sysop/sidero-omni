@@ -433,10 +433,18 @@ main() {
                 exit 1
             fi
             
-            # Try the most likely flag name based on error structure
-            # Params.Storage.Default.Etcd.PrivateKeySource -> --storage-default-etcd-private-key-source
-            omni_args+=("--storage-default-etcd-private-key-source" "${key_path}")
-            log_info "Using etcd private key source: ${key_path}"
+            # Try different flag name variations based on Go CLI conventions
+            # The error structure is: Params.Storage.Default.Etcd.PrivateKeySource
+            # Since --storage-default-etcd-private-key-source failed, try variations:
+            # Try --storage-etcd-private-key-source (without "default")
+            # Also export as environment variable in case Omni reads it that way
+            export OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE="${key_path}"
+            export OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE="${key_path}"
+            
+            # Try the flag without "default" first
+            omni_args+=("--storage-etcd-private-key-source" "${key_path}")
+            log_info "Using etcd private key source (flag: --storage-etcd-private-key-source): ${key_path}"
+            log_info "Also exported as environment variables (OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE, OMNI_STORAGE_DEFAULT_ETCD_PRIVATE_KEY_SOURCE)"
             
             # Log the final command
             log_info "Executing: $omni_path ${omni_args[*]}"
