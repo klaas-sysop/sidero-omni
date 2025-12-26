@@ -92,11 +92,21 @@ normalize_boolean() {
 validate_auth_config() {
     log_info "Validating authentication configuration..."
     
+    # Debug: Log raw values before normalization
+    log_info "Raw authentication values:"
+    log_info "  - AUTH0_ENABLED=${AUTH0_ENABLED:-<not set>}"
+    log_info "  - OMNI_AUTH_AUTH0_ENABLED=${OMNI_AUTH_AUTH0_ENABLED:-<not set>}"
+    log_info "  - AUTH0_DOMAIN=${AUTH0_DOMAIN:-<not set>}"
+    log_info "  - OMNI_AUTH_AUTH0_DOMAIN=${OMNI_AUTH_AUTH0_DOMAIN:-<not set>}"
+    log_info "  - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID:-<not set>}"
+    log_info "  - OMNI_AUTH_AUTH0_CLIENT_ID=${OMNI_AUTH_AUTH0_CLIENT_ID:-<not set>}"
+    
     # Normalize boolean values for authentication methods
-    # Read from OMNI_AUTH_* variables that docker-compose sets from .env file
-    local auth0_enabled=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
-    local saml_enabled=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
-    local oidc_enabled=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
+    # Check both original variables (from .env) and OMNI_AUTH_* variables (set by docker-compose)
+    # This handles cases where docker-compose may not have set the OMNI_AUTH_* vars yet
+    local auth0_enabled=$(normalize_boolean "${AUTH0_ENABLED:-${OMNI_AUTH_AUTH0_ENABLED:-false}}")
+    local saml_enabled=$(normalize_boolean "${SAML_ENABLED:-${OMNI_AUTH_SAML_ENABLED:-false}}")
+    local oidc_enabled=$(normalize_boolean "${OIDC_ENABLED:-${OMNI_AUTH_OIDC_ENABLED:-false}}")
     
     # Export normalized values (this ensures proper boolean format for Omni)
     export OMNI_AUTH_AUTH0_ENABLED="$auth0_enabled"
@@ -121,41 +131,60 @@ validate_auth_config() {
     
     # Validate Auth0 configuration if enabled
     if [ "$auth0_enabled" = "true" ]; then
-        if [ -z "${OMNI_AUTH_AUTH0_DOMAIN:-}" ]; then
+        # Check both original and OMNI_AUTH_* variable names
+        local auth0_domain="${AUTH0_DOMAIN:-${OMNI_AUTH_AUTH0_DOMAIN:-}}"
+        local auth0_client_id="${AUTH0_CLIENT_ID:-${OMNI_AUTH_AUTH0_CLIENT_ID:-}}"
+        
+        if [ -z "$auth0_domain" ]; then
             log_error "AUTH0_ENABLED=true but AUTH0_DOMAIN is not set"
             exit 1
         fi
-        if [ -z "${OMNI_AUTH_AUTH0_CLIENT_ID:-}" ]; then
+        if [ -z "$auth0_client_id" ]; then
             log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_ID is not set"
             exit 1
         fi
-        log_success "Auth0 configuration is valid (Domain: ${OMNI_AUTH_AUTH0_DOMAIN}, Client ID: ${OMNI_AUTH_AUTH0_CLIENT_ID})"
+        log_success "Auth0 configuration is valid (Domain: $auth0_domain, Client ID: $auth0_client_id)"
+        # Export the values to ensure Omni receives them
+        export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
+        export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
     fi
     
     # Validate SAML configuration if enabled
     if [ "$saml_enabled" = "true" ]; then
-        if [ -z "${OMNI_AUTH_SAML_URL:-}" ]; then
+        local saml_url="${SAML_URL:-${OMNI_AUTH_SAML_URL:-}}"
+        if [ -z "$saml_url" ]; then
             log_error "SAML_ENABLED=true but SAML_URL is not set"
             exit 1
         fi
-        log_success "SAML configuration is valid (URL: ${OMNI_AUTH_SAML_URL})"
+        log_success "SAML configuration is valid (URL: $saml_url)"
+        export OMNI_AUTH_SAML_URL="$saml_url"
     fi
     
     # Validate OIDC configuration if enabled
     if [ "$oidc_enabled" = "true" ]; then
-        if [ -z "${OMNI_AUTH_OIDC_PROVIDER_URL:-}" ]; then
+        local oidc_provider_url="${OIDC_PROVIDER_URL:-${OMNI_AUTH_OIDC_PROVIDER_URL:-}}"
+        local oidc_client_id="${OIDC_CLIENT_ID:-${OMNI_AUTH_OIDC_CLIENT_ID:-}}"
+        local oidc_client_secret="${OIDC_CLIENT_SECRET:-${OMNI_AUTH_OIDC_CLIENT_SECRET:-}}"
+        
+        if [ -z "$oidc_provider_url" ]; then
             log_error "OIDC_ENABLED=true but OIDC_PROVIDER_URL is not set"
             exit 1
         fi
-        if [ -z "${OMNI_AUTH_OIDC_CLIENT_ID:-}" ]; then
+        if [ -z "$oidc_client_id" ]; then
             log_error "OIDC_ENABLED=true but OIDC_CLIENT_ID is not set"
             exit 1
         fi
-        if [ -z "${OMNI_AUTH_OIDC_CLIENT_SECRET:-}" ]; then
+        if [ -z "$oidc_client_secret" ]; then
             log_error "OIDC_ENABLED=true but OIDC_CLIENT_SECRET is not set"
             exit 1
         fi
-        log_success "OIDC configuration is valid (Provider: ${OMNI_AUTH_OIDC_PROVIDER_URL})"
+        log_success "OIDC configuration is valid (Provider: $oidc_provider_url)"
+        export OMNI_AUTH_OIDC_PROVIDER_URL="$oidc_provider_url"
+        export OMNI_AUTH_OIDC_CLIENT_ID="$oidc_client_id"
+        export OMNI_AUTH_OIDC_CLIENT_SECRET="$oidc_client_secret"
+        if [ -n "${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}" ]; then
+            export OMNI_AUTH_OIDC_LOGOUT_URL="${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}"
+        fi
     fi
     
     log_success "Authentication configuration is valid"
