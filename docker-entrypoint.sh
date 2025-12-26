@@ -88,6 +88,23 @@ normalize_boolean() {
     esac
 }
 
+# Check if a value is a placeholder (contains common placeholder patterns)
+is_placeholder() {
+    local value="${1:-}"
+    if [ -z "$value" ]; then
+        return 0  # Empty is considered placeholder
+    fi
+    # Check for common placeholder patterns
+    case "${value,,}" in
+        *"your-"*|*"example"*|*"placeholder"*|*"change-me"*|*"replace"*|*"xxx"*)
+            return 0  # Is placeholder
+            ;;
+        *)
+            return 1  # Not placeholder
+            ;;
+    esac
+}
+
 # Validate authentication configuration
 validate_auth_config() {
     log_info "Validating authentication configuration..."
@@ -119,13 +136,26 @@ validate_auth_config() {
     log_info "  - SAML: $saml_enabled"
     log_info "  - OIDC: $oidc_enabled"
     
-    # Check if at least one authentication method is enabled
-    if [ "$auth0_enabled" != "true" ] && [ "$saml_enabled" != "true" ] && [ "$oidc_enabled" != "true" ]; then
+    # Re-check authentication status after placeholder validation
+    # (SAML/OIDC might have been disabled if they contained placeholders)
+    if [ "$saml_enabled" = "false" ]; then
+        export OMNI_AUTH_SAML_ENABLED="false"
+    fi
+    if [ "$oidc_enabled" = "false" ]; then
+        export OMNI_AUTH_OIDC_ENABLED="false"
+    fi
+    
+    # Final check: ensure at least one authentication method is enabled
+    local final_auth0=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
+    local final_saml=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
+    local final_oidc=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
+    
+    if [ "$final_auth0" != "true" ] && [ "$final_saml" != "true" ] && [ "$final_oidc" != "true" ]; then
         log_error "No authentication method is enabled"
         log_error "Please enable at least one authentication method:"
         log_error "  - Set AUTH0_ENABLED=true with AUTH0_DOMAIN and AUTH0_CLIENT_ID"
-        log_error "  - Set SAML_ENABLED=true with SAML_URL"
-        log_error "  - Set OIDC_ENABLED=true with OIDC_PROVIDER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET"
+        log_error "  - Set SAML_ENABLED=true with SAML_URL (non-placeholder)"
+        log_error "  - Set OIDC_ENABLED=true with OIDC_PROVIDER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET (non-placeholder)"
         exit 1
     fi
     
@@ -134,6 +164,7 @@ validate_auth_config() {
         # Check both original and OMNI_AUTH_* variable names
         local auth0_domain="${AUTH0_DOMAIN:-${OMNI_AUTH_AUTH0_DOMAIN:-}}"
         local auth0_client_id="${AUTH0_CLIENT_ID:-${OMNI_AUTH_AUTH0_CLIENT_ID:-}}"
+        local auth0_client_secret="${AUTH0_CLIENT_SECRET:-${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}}"
         
         if [ -z "$auth0_domain" ]; then
             log_error "AUTH0_ENABLED=true but AUTH0_DOMAIN is not set"
@@ -143,10 +174,21 @@ validate_auth_config() {
             log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_ID is not set"
             exit 1
         fi
-        log_success "Auth0 configuration is valid (Domain: $auth0_domain, Client ID: $auth0_client_id)"
-        # Export the values to ensure Omni receives them
-        export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
-        export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
+        # Check if domain or client ID are placeholders
+        if is_placeholder "$auth0_domain" || is_placeholder "$auth0_client_id"; then
+            log_warn "Auth0 configuration appears to contain placeholder values, disabling Auth0"
+            export OMNI_AUTH_AUTH0_ENABLED="false"
+            auth0_enabled="false"
+        else
+            log_success "Auth0 configuration is valid (Domain: $auth0_domain, Client ID: $auth0_client_id)"
+            # Export the values to ensure Omni receives them
+            export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
+            export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
+            # Export client secret if provided (some Auth0 setups may not require it)
+            if [ -n "$auth0_client_secret" ] && ! is_placeholder "$auth0_client_secret"; then
+                export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
+            fi
+        fi
     fi
     
     # Validate SAML configuration if enabled
@@ -156,8 +198,15 @@ validate_auth_config() {
             log_error "SAML_ENABLED=true but SAML_URL is not set"
             exit 1
         fi
-        log_success "SAML configuration is valid (URL: $saml_url)"
-        export OMNI_AUTH_SAML_URL="$saml_url"
+        # Check if URL is a placeholder
+        if is_placeholder "$saml_url"; then
+            log_warn "SAML_URL appears to be a placeholder value, disabling SAML"
+            export OMNI_AUTH_SAML_ENABLED="false"
+            saml_enabled="false"
+        else
+            log_success "SAML configuration is valid (URL: $saml_url)"
+            export OMNI_AUTH_SAML_URL="$saml_url"
+        fi
     fi
     
     # Validate OIDC configuration if enabled
@@ -178,12 +227,19 @@ validate_auth_config() {
             log_error "OIDC_ENABLED=true but OIDC_CLIENT_SECRET is not set"
             exit 1
         fi
-        log_success "OIDC configuration is valid (Provider: $oidc_provider_url)"
-        export OMNI_AUTH_OIDC_PROVIDER_URL="$oidc_provider_url"
-        export OMNI_AUTH_OIDC_CLIENT_ID="$oidc_client_id"
-        export OMNI_AUTH_OIDC_CLIENT_SECRET="$oidc_client_secret"
-        if [ -n "${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}" ]; then
-            export OMNI_AUTH_OIDC_LOGOUT_URL="${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}"
+        # Check if URLs/values are placeholders
+        if is_placeholder "$oidc_provider_url" || is_placeholder "$oidc_client_id" || is_placeholder "$oidc_client_secret"; then
+            log_warn "OIDC configuration appears to contain placeholder values, disabling OIDC"
+            export OMNI_AUTH_OIDC_ENABLED="false"
+            oidc_enabled="false"
+        else
+            log_success "OIDC configuration is valid (Provider: $oidc_provider_url)"
+            export OMNI_AUTH_OIDC_PROVIDER_URL="$oidc_provider_url"
+            export OMNI_AUTH_OIDC_CLIENT_ID="$oidc_client_id"
+            export OMNI_AUTH_OIDC_CLIENT_SECRET="$oidc_client_secret"
+            if [ -n "${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}" ]; then
+                export OMNI_AUTH_OIDC_LOGOUT_URL="${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}"
+            fi
         fi
     fi
     
@@ -694,16 +750,30 @@ main() {
             echo "{\"id\":\"log_$(date +%s)_final\",\"timestamp\":$(date +%s)000,\"location\":\"docker-entrypoint.sh:495\",\"message\":\"Final command execution\",\"data\":{\"omni_path\":\"${omni_path}\",\"args\":\"${omni_args[*]}\",\"env_vars\":{\"OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE\":\"${OMNI_STORAGE_ETCD_PRIVATE_KEY_SOURCE}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"ALL\"}" >> /workspace/.cursor/debug.log 2>/dev/null || true
             # #endregion
             
-            # Final verification: Ensure authentication variables are set
-            if [ -z "${OMNI_AUTH_AUTH0_ENABLED:-}" ] && [ -z "${OMNI_AUTH_SAML_ENABLED:-}" ] && [ -z "${OMNI_AUTH_OIDC_ENABLED:-}" ]; then
-                log_error "CRITICAL: No OMNI_AUTH_*_ENABLED variables are set before executing Omni!"
+            # Final verification: Ensure authentication variables are set and valid
+            local final_auth0_check=$(normalize_boolean "${OMNI_AUTH_AUTH0_ENABLED:-false}")
+            local final_saml_check=$(normalize_boolean "${OMNI_AUTH_SAML_ENABLED:-false}")
+            local final_oidc_check=$(normalize_boolean "${OMNI_AUTH_OIDC_ENABLED:-false}")
+            
+            if [ "$final_auth0_check" != "true" ] && [ "$final_saml_check" != "true" ] && [ "$final_oidc_check" != "true" ]; then
+                log_error "CRITICAL: No valid authentication method is enabled before executing Omni!"
+                log_error "OMNI_AUTH_AUTH0_ENABLED=${OMNI_AUTH_AUTH0_ENABLED:-<not set>}"
+                log_error "OMNI_AUTH_SAML_ENABLED=${OMNI_AUTH_SAML_ENABLED:-<not set>}"
+                log_error "OMNI_AUTH_OIDC_ENABLED=${OMNI_AUTH_OIDC_ENABLED:-<not set>}"
                 log_error "This should not happen if validate_auth_config() ran successfully."
                 exit 1
             fi
             
+            # Ensure all authentication variables are explicitly exported one more time before exec
+            # This guarantees they're in the environment when Omni starts
+            export OMNI_AUTH_AUTH0_ENABLED="$final_auth0_check"
+            export OMNI_AUTH_SAML_ENABLED="$final_saml_check"
+            export OMNI_AUTH_OIDC_ENABLED="$final_oidc_check"
+            
             # Execute omni with arguments
             # Use exec to replace the shell process, ensuring all exported environment variables are passed
             log_info "About to execute Omni with environment variables exported"
+            log_info "Final authentication status - Auth0: $final_auth0_check, SAML: $final_saml_check, OIDC: $final_oidc_check"
             if [ ${#omni_args[@]} -gt 0 ]; then
                 exec "$omni_path" "${omni_args[@]}"
             else
