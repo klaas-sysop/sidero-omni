@@ -60,4 +60,5 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
     CMD curl -f https://localhost/health -k || exit 1
 
 # Use our custom entrypoint
+# The entrypoint script will handle finding and executing omni if no command is provided
 ENTRYPOINT ["/bin/bash", "/scripts/entrypoint.sh"]

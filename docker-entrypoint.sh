@@ -118,10 +118,20 @@ dns_cloudflare_api_token = ${CLOUDFLARE_API_TOKEN}
 EOF
     chmod 600 "$creds_file"
     
+    # Determine if we should use staging server
+    local staging_flag=""
+    if [ "${LETSENCRYPT_STAGING:-false}" = "true" ]; then
+        staging_flag="--staging"
+        log_info "Using Let's Encrypt STAGING server (for testing)"
+    else
+        log_info "Using Let's Encrypt PRODUCTION server"
+    fi
+    
     log_info "Requesting certificate from Let's Encrypt for domain: $DOMAIN_NAME"
     
     # Request certificate
     if certbot certonly \
+        $staging_flag \
         --dns-cloudflare \
         --dns-cloudflare-credentials "$creds_file" \
         --dns-cloudflare-propagation-seconds 10 \
@@ -288,8 +298,27 @@ main() {
     log_success "=== Pre-flight checks complete, starting Omni ==="
     
     # Start Omni with provided arguments or defaults
-    # This replaces the normal Omni startup
-    exec "$@"
+    # If no arguments provided, try to find and execute the omni binary
+    if [ $# -eq 0 ]; then
+        # Try common locations for the omni binary
+        if [ -f "/usr/bin/omni" ]; then
+            log_info "Starting Omni from /usr/bin/omni"
+            exec /usr/bin/omni
+        elif [ -f "/usr/local/bin/omni" ]; then
+            log_info "Starting Omni from /usr/local/bin/omni"
+            exec /usr/local/bin/omni
+        elif command -v omni >/dev/null 2>&1; then
+            log_info "Starting Omni from PATH"
+            exec omni
+        else
+            log_error "No command provided and omni binary not found"
+            log_error "Please provide a command or ensure omni is in PATH"
+            exit 1
+        fi
+    else
+        # Execute provided command
+        exec "$@"
+    fi
 }
 
 # Run main function with all remaining arguments

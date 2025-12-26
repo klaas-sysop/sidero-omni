@@ -44,6 +44,16 @@ mkdir -p "$CERTS_DIR"
 if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ZONE_ID" ]; then
     log_info "Generating certificate via Cloudflare DNS..."
     
+    # Check if staging is enabled
+    LETSENCRYPT_STAGING="${LETSENCRYPT_STAGING:-false}"
+    staging_flag=""
+    if [ "$LETSENCRYPT_STAGING" = "true" ]; then
+        staging_flag="--staging"
+        log_info "Using Let's Encrypt STAGING server (for testing)"
+    else
+        log_info "Using Let's Encrypt PRODUCTION server"
+    fi
+    
     creds_file="/tmp/cloudflare.ini"
     cat > "$creds_file" << EOF
 dns_cloudflare_api_token = ${CLOUDFLARE_API_TOKEN}
@@ -51,6 +61,7 @@ EOF
     chmod 600 "$creds_file"
     
     if certbot certonly \
+        $staging_flag \
         --dns-cloudflare \
         --dns-cloudflare-credentials "$creds_file" \
         --non-interactive \
