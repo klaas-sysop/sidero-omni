@@ -31,6 +31,8 @@ FROM ghcr.io/siderolabs/omni:latest
 # Copy bash and runtime libraries from builder
 COPY --from=builder /bin/bash /bin/bash
 COPY --from=builder /bin/sh /bin/sh
+COPY --from=builder /bin/mkdir /bin/mkdir
+COPY --from=builder /bin/chmod /bin/chmod
 COPY --from=builder /usr/bin/curl /usr/bin/curl
 COPY --from=builder /lib/x86_64-linux-gnu /lib/x86_64-linux-gnu
 COPY --from=builder /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
@@ -49,10 +51,3 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
 
 # Use our custom entrypoint
 ENTRYPOINT ["/bin/bash", "/scripts/entrypoint.sh"]
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-    CMD curl -f https://localhost/health -k || exit 1
-
-# Use our custom entrypoint
-ENTRYPOINT ["/scripts/entrypoint.sh"]
