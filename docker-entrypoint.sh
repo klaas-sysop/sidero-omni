@@ -809,10 +809,34 @@ main() {
                     log_info "  $line"
                 fi
             done || true
+            
+            # Verify environment variables are actually in the environment before exec
+            # This helps debug if variables are being lost
+            log_info "Verifying environment variables are accessible:"
+            if [ -n "${OMNI_AUTH_AUTH0_ENABLED:-}" ]; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_ENABLED is set to: ${OMNI_AUTH_AUTH0_ENABLED}"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_ENABLED is NOT set!"
+            fi
+            if [ -n "${OMNI_AUTH_AUTH0_DOMAIN:-}" ]; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_DOMAIN is set to: ${OMNI_AUTH_AUTH0_DOMAIN}"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_DOMAIN is NOT set!"
+            fi
+            if [ -n "${OMNI_AUTH_AUTH0_CLIENT_ID:-}" ]; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_ID is set (length: ${#OMNI_AUTH_AUTH0_CLIENT_ID})"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_ID is NOT set!"
+            fi
+            
+            # Execute Omni - exec will preserve all exported environment variables
+            # All OMNI_AUTH_* variables have been exported above
             if [ ${#omni_args[@]} -gt 0 ]; then
+                log_info "Executing Omni (environment variables should be inherited by exec)"
                 exec "$omni_path" "${omni_args[@]}"
             else
                 log_warn "No command-line arguments provided, Omni may fail due to missing configuration"
+                log_info "Executing Omni (environment variables should be inherited by exec)"
                 exec "$omni_path"
             fi
         else
