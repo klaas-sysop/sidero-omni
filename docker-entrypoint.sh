@@ -411,28 +411,32 @@ main() {
             # Build command arguments
             local omni_args=()
             
-            # Add SQLite storage path if specified
+            # Set defaults if not provided via environment variables
+            # These should be set in docker-compose.yml, but provide fallbacks
+            local sqlite_path="${OMNI_SQLITE_STORAGE_PATH:-/_out/omni.db}"
+            local private_key_source="${OMNI_PRIVATE_KEY_SOURCE:-file:///etc/omni/tls/omni.asc}"
+            
+            # Add SQLite storage path (required)
             # Error message explicitly mentions: --sqlite-storage-path flag
-            if [ -n "${OMNI_SQLITE_STORAGE_PATH:-}" ]; then
-                omni_args+=("--sqlite-storage-path" "${OMNI_SQLITE_STORAGE_PATH}")
-                log_info "Added SQLite storage path argument: --sqlite-storage-path ${OMNI_SQLITE_STORAGE_PATH}"
-            else
-                log_warn "OMNI_SQLITE_STORAGE_PATH not set, Omni will fail to start"
+            omni_args+=("--sqlite-storage-path" "${sqlite_path}")
+            log_info "Using SQLite storage path: ${sqlite_path}"
+            
+            # Add etcd private key source (required for GPG-encrypted etcd)
+            # Error shows: Params.Storage.Default.Etcd.PrivateKeySource
+            # Remove file:// prefix if present
+            local key_path="${private_key_source#file://}"
+            
+            # Verify the key file exists
+            if [ ! -f "$key_path" ]; then
+                log_error "GPG key file not found at: $key_path"
+                log_error "Expected from OMNI_PRIVATE_KEY_SOURCE: ${private_key_source}"
+                exit 1
             fi
             
-            # Add etcd private key source if specified (for GPG-encrypted etcd)
-            # Error shows: Params.Storage.Default.Etcd.PrivateKeySource
-            # Try common flag name variations
-            if [ -n "${OMNI_PRIVATE_KEY_SOURCE:-}" ]; then
-                # Remove file:// prefix if present
-                local key_path="${OMNI_PRIVATE_KEY_SOURCE#file://}"
-                # Try the most likely flag name based on error structure
-                # Params.Storage.Default.Etcd.PrivateKeySource -> --storage-default-etcd-private-key-source
-                omni_args+=("--storage-default-etcd-private-key-source" "${key_path}")
-                log_info "Added etcd private key source argument: --storage-default-etcd-private-key-source ${key_path}"
-            else
-                log_warn "OMNI_PRIVATE_KEY_SOURCE not set, Omni will fail to start"
-            fi
+            # Try the most likely flag name based on error structure
+            # Params.Storage.Default.Etcd.PrivateKeySource -> --storage-default-etcd-private-key-source
+            omni_args+=("--storage-default-etcd-private-key-source" "${key_path}")
+            log_info "Using etcd private key source: ${key_path}"
             
             # Log the final command
             log_info "Executing: $omni_path ${omni_args[*]}"
