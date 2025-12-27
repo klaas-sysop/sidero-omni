@@ -795,9 +795,9 @@ main() {
             if [ "$final_auth0_check" = "true" ]; then
                 export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
-                if [ -n "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}" ]; then
-                    export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
-                fi
+                # Always export client secret if it exists (even if empty, to ensure it's in environment)
+                # Omni may check for the presence of this variable to determine if Auth0 is properly configured
+                export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
             fi
             if [ "$final_saml_check" = "true" ]; then
                 export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
@@ -844,6 +844,11 @@ main() {
                 log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_ID is set (length: ${#OMNI_AUTH_AUTH0_CLIENT_ID})"
             else
                 log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_ID is NOT set!"
+            fi
+            if [ -n "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}" ]; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is set (length: ${#OMNI_AUTH_AUTH0_CLIENT_SECRET})"
+            else
+                log_warn "  ⚠ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT set (this may cause Omni to reject Auth0 authentication)"
             fi
             
             # Execute Omni - exec will preserve all exported environment variables
