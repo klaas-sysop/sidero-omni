@@ -172,10 +172,9 @@ validate_auth_config() {
             # Export the values to ensure Omni receives them
             export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
             export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
-            # Export client secret if provided (some Auth0 setups may not require it)
-            if [ -n "$auth0_client_secret" ] && ! is_placeholder "$auth0_client_secret"; then
-                export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
-            fi
+            # Always export client secret when Auth0 is enabled (even if empty, to ensure it's in environment)
+            # Omni may check for the presence of this variable to determine if Auth0 is properly configured
+            export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret:-}"
         fi
     fi
     
