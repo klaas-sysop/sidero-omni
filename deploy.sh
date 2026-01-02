@@ -166,9 +166,44 @@ generate_gpg_key() {
     
     local gpg_key_file="${GPG_KEY_PATH:-./omni.asc}"
     
+    # Validate existing key if it exists
     if [ -f "$gpg_key_file" ]; then
-        print_info "GPG key already exists. Skipping generation."
-        return
+        print_info "GPG key file exists. Validating..."
+        
+        # Try to import and validate the key
+        local temp_gnupg=$(mktemp -d)
+        local old_gnupg="${GNUPGHOME:-}"
+        export GNUPGHOME="$temp_gnupg"
+        
+        # Try to import the key
+        if gpg --batch --import "$gpg_key_file" &> /dev/null 2>&1; then
+            # Check if we can list the key (validates it's not corrupted)
+            if gpg --list-secret-keys --with-colons 2>/dev/null | grep -q "^fpr"; then
+                rm -rf "$temp_gnupg"
+                [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+                print_info "GPG key is valid. Using existing key."
+                return
+            fi
+        fi
+        
+        # Key is invalid or corrupted
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+        
+        print_warn "Existing GPG key appears to be corrupted or invalid."
+        print_warn "Backing up old key and generating a new one..."
+        mv "$gpg_key_file" "${gpg_key_file}.backup.$(date +%s)" 2>/dev/null || rm -f "$gpg_key_file"
+        
+        # Warn about etcd data if it exists
+        if [ -d "./etcd" ] && [ "$(ls -A ./etcd 2>/dev/null)" ]; then
+            print_warn "WARNING: Existing etcd data found. It may be encrypted with the old key."
+            print_warn "If you continue, you may need to clear the etcd directory to start fresh."
+            read -p "Do you want to continue? (y/N): " confirm
+            if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                print_error "Aborted. Please restore the original key or clear etcd data manually."
+                exit 1
+            fi
+        fi
     fi
     
     print_info "Generating GPG encryption key for etcd..."
@@ -235,12 +270,15 @@ EOF
     
     rm -f "$subkey_config"
     
-    # Export key
-    if ! gpg --batch --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
-        rm -rf "$temp_gnupg"
-        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
-        print_error "Failed to export GPG key"
-        exit 1
+    # Export key using fingerprint (more reliable than email)
+    if ! gpg --batch --export-secret-key --armor "$fingerprint" > "$gpg_key_file" 2>/dev/null; then
+        # Fallback to email if fingerprint doesn't work
+        if ! gpg --batch --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
+            rm -rf "$temp_gnupg"
+            [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+            print_error "Failed to export GPG key"
+            exit 1
+        fi
     fi
     
     # Clean up temporary GPG home
