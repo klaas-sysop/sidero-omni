@@ -142,6 +142,19 @@ After deployment, you'll have:
 
 ## Troubleshooting
 
+### Docker Compose network_mode error in Dokploy
+
+If you get an error like `"service omni declares mutually exclusive network_mode and networks"` when deploying with Dokploy:
+
+This is a known issue with some versions of Dokploy that automatically create networks. The compose file is correct, but Dokploy may be injecting network configurations.
+
+**Possible solutions:**
+1. Check if Dokploy has a setting to disable automatic network creation
+2. Try using a different deployment method (direct Docker Compose)
+3. Contact Dokploy support about this issue
+
+The compose file uses `network_mode: host` which is required for Omni's WireGuard functionality.
+
 ### Container won't start
 
 - Check logs: `docker compose logs omni`

@@ -3,7 +3,6 @@ services:
     image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-latest}
     container_name: omni
     network_mode: host
-    networks: []
     cap_add:
       - NET_ADMIN
     devices:
