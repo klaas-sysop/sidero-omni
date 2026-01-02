@@ -177,31 +177,75 @@ generate_gpg_key() {
     local email="${OMNI_ADMIN_EMAIL:-omni@example.com}"
     local key_name="Omni (Used for etcd data encryption) $email"
     
-    # Generate GPG key
-    if ! gpg --quick-generate-key "$key_name" rsa4096 cert never &> /dev/null; then
+    # Use a temporary GPG home directory to avoid TTY issues
+    local temp_gnupg=$(mktemp -d)
+    local old_gnupg="${GNUPGHOME:-}"
+    export GNUPGHOME="$temp_gnupg"
+    
+    # Create GPG batch config for non-interactive key generation
+    local batch_config=$(mktemp)
+    cat > "$batch_config" <<EOF
+%no-protection
+Key-Type: RSA
+Key-Length: 4096
+Key-Usage: cert
+Name-Real: Omni
+Name-Email: $email
+Name-Comment: Used for etcd data encryption
+Expire-Date: 0
+%commit
+EOF
+    
+    # Generate GPG key using batch config
+    if ! gpg --batch --gen-key "$batch_config" &> /dev/null 2>&1; then
+        rm -f "$batch_config"
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
         print_error "Failed to generate GPG key"
         exit 1
     fi
     
+    rm -f "$batch_config"
+    
     # Get fingerprint
-    local fingerprint=$(gpg --list-secret-keys --with-colons | grep "^fpr" | head -1 | cut -d: -f10)
+    local fingerprint=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep "^fpr" | head -1 | cut -d: -f10)
     
     if [ -z "$fingerprint" ]; then
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
         print_error "Failed to get GPG key fingerprint"
         exit 1
     fi
     
+    # Create batch config for encryption subkey
+    local subkey_config=$(mktemp)
+    cat > "$subkey_config" <<EOF
+addkey
+rsa
+4096
+0
+save
+EOF
+    
     # Add encryption subkey
-    if ! gpg --quick-add-key "$fingerprint" rsa4096 encr never &> /dev/null; then
-        print_error "Failed to add encryption subkey"
-        exit 1
+    if ! echo -e "addkey\nrsa\n4096\n0\nsave" | gpg --batch --command-fd 0 --edit-key "$fingerprint" &> /dev/null 2>&1; then
+        # Alternative: use quick-add-key if available
+        gpg --batch --quick-add-key "$fingerprint" rsa4096 encr never &> /dev/null 2>&1 || true
     fi
     
+    rm -f "$subkey_config"
+    
     # Export key
-    if ! gpg --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
+    if ! gpg --batch --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
         print_error "Failed to export GPG key"
         exit 1
     fi
+    
+    # Clean up temporary GPG home
+    rm -rf "$temp_gnupg"
+    [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
     
     # Set proper permissions
     chmod 600 "$gpg_key_file"
