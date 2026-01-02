@@ -162,31 +162,29 @@ validate_auth_config() {
             log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_ID is not set"
             exit 1
         fi
-        if [ -z "$auth0_client_secret" ]; then
-            log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_SECRET is not set"
-            log_error "Auth0 requires a client secret to be configured. Please set AUTH0_CLIENT_SECRET or OMNI_AUTH_AUTH0_CLIENT_SECRET."
-            exit 1
+        # Client secret is optional for Single Page Applications (SPA) - Auth0 SPAs use PKCE instead
+        # However, if provided, it must be non-empty and not a placeholder
+        if [ -n "$auth0_client_secret" ] && is_placeholder "$auth0_client_secret"; then
+            log_warn "AUTH0_CLIENT_SECRET appears to be a placeholder value, treating as not set (SPA applications don't require client secret)"
+            auth0_client_secret=""
         fi
-        # Check if domain, client ID, or client secret are placeholders
-        if is_placeholder "$auth0_domain" || is_placeholder "$auth0_client_id" || is_placeholder "$auth0_client_secret"; then
+        # Check if domain or client ID are placeholders
+        if is_placeholder "$auth0_domain" || is_placeholder "$auth0_client_id"; then
             log_warn "Auth0 configuration appears to contain placeholder values, disabling Auth0"
             export OMNI_AUTH_AUTH0_ENABLED="false"
             auth0_enabled="false"
         else
             log_success "Auth0 configuration is valid (Domain: $auth0_domain, Client ID: $auth0_client_id)"
+            if [ -n "$auth0_client_secret" ]; then
+                log_info "  Client secret provided (for non-SPA applications)"
+            else
+                log_info "  No client secret provided (using SPA/PKCE flow - this is normal for Single Page Applications)"
+            fi
             # Export the values to ensure Omni receives them
             export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
             export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
-            export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
-            
-            # Verify that the exported secret is actually non-empty
-            # This catches edge cases where the variable might have been set to an empty string
-            if [ -z "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}" ]; then
-                log_error "CRITICAL: OMNI_AUTH_AUTH0_CLIENT_SECRET was exported but is empty!"
-                log_error "This indicates AUTH0_CLIENT_SECRET or OMNI_AUTH_AUTH0_CLIENT_SECRET was not properly set."
-                log_error "Please ensure AUTH0_CLIENT_SECRET is set in your environment or .env file."
-                exit 1
-            fi
+            # Export client secret only if provided (empty string is acceptable for SPA applications)
+            export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret:-}"
         fi
     fi
     
@@ -809,7 +807,8 @@ main() {
                 local auth0_client_id_recheck="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
                 local auth0_client_secret_recheck="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
                 
-                # Verify all required values are non-empty before re-exporting
+                # Verify required values are non-empty before re-exporting
+                # Note: Client secret is optional for SPA applications (they use PKCE instead)
                 if [ -z "$auth0_domain_recheck" ]; then
                     log_error "CRITICAL: OMNI_AUTH_AUTH0_DOMAIN is empty before executing Omni!"
                     log_error "This should have been caught by validate_auth_config()."
@@ -820,17 +819,15 @@ main() {
                     log_error "This should have been caught by validate_auth_config()."
                     exit 1
                 fi
+                # Client secret is optional - empty is acceptable for SPA applications
                 if [ -z "$auth0_client_secret_recheck" ]; then
-                    log_error "CRITICAL: OMNI_AUTH_AUTH0_CLIENT_SECRET is empty before executing Omni!"
-                    log_error "This should have been caught by validate_auth_config()."
-                    log_error "Please ensure AUTH0_CLIENT_SECRET is set in your environment or .env file."
-                    exit 1
+                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is not set (using SPA/PKCE flow - this is normal)"
                 fi
                 
-                # All values are non-empty, safe to export
+                # Export values (client secret can be empty for SPA applications)
                 export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain_recheck"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id_recheck"
-                export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret_recheck"
+                export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret_recheck:-}"
             fi
             if [ "$final_saml_check" = "true" ]; then
                 export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
@@ -881,27 +878,29 @@ main() {
             if [ -n "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}" ]; then
                 log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is set (length: ${#OMNI_AUTH_AUTH0_CLIENT_SECRET})"
             else
-                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT set!"
-                log_error "  This should have been caught by validate_auth_config(). Auth0 requires a client secret."
-                exit 1
+                log_info "  ℹ OMNI_AUTH_AUTH0_CLIENT_SECRET is not set (using SPA/PKCE flow - this is normal for Single Page Applications)"
             fi
             
-            # Final defensive check: Verify all required Auth0 variables are non-empty before executing Omni
-            # This catches any edge cases where variables might have been set to empty strings
+            # Final defensive check: Verify required Auth0 variables are non-empty before executing Omni
+            # Note: Client secret is optional for SPA applications (they use PKCE instead)
             if [ "$final_auth0_check" = "true" ]; then
                 local auth0_domain_final="${OMNI_AUTH_AUTH0_DOMAIN:-}"
                 local auth0_client_id_final="${OMNI_AUTH_AUTH0_CLIENT_ID:-}"
                 local auth0_client_secret_final="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}"
                 
-                if [ -z "$auth0_domain_final" ] || [ -z "$auth0_client_id_final" ] || [ -z "$auth0_client_secret_final" ]; then
-                    log_error "CRITICAL: One or more required Auth0 variables are empty before executing Omni!"
+                if [ -z "$auth0_domain_final" ] || [ -z "$auth0_client_id_final" ]; then
+                    log_error "CRITICAL: Required Auth0 variables are empty before executing Omni!"
                     log_error "  OMNI_AUTH_AUTH0_DOMAIN: ${auth0_domain_final:+set (length: ${#auth0_domain_final})}${auth0_domain_final:-NOT SET}"
                     log_error "  OMNI_AUTH_AUTH0_CLIENT_ID: ${auth0_client_id_final:+set (length: ${#auth0_client_id_final})}${auth0_client_id_final:-NOT SET}"
-                    log_error "  OMNI_AUTH_AUTH0_CLIENT_SECRET: ${auth0_client_secret_final:+set (length: ${#auth0_client_secret_final})}${auth0_client_secret_final:-NOT SET}"
-                    log_error "Please ensure all Auth0 environment variables are properly set in your .env file or environment."
+                    log_error "Please ensure AUTH0_DOMAIN and AUTH0_CLIENT_ID are properly set in your .env file or environment."
                     exit 1
                 fi
-                log_info "  ✓ Final check passed: All required Auth0 variables are non-empty"
+                # Client secret is optional - log status but don't fail if empty
+                if [ -z "$auth0_client_secret_final" ]; then
+                    log_info "  ✓ Final check passed: Required Auth0 variables are set (Client secret not set - using SPA/PKCE flow)"
+                else
+                    log_info "  ✓ Final check passed: All Auth0 variables are set (including client secret)"
+                fi
             fi
             
             # Execute Omni - exec will preserve all exported environment variables
@@ -909,6 +908,35 @@ main() {
             # Variable precedence: entrypoint exports (highest) > docker-compose.yml > Dockerfile ENV (lowest)
             log_info "=== Ready to execute Omni ==="
             log_info "Environment variable precedence: Entrypoint exports (highest) > docker-compose.yml > Dockerfile ENV (lowest)"
+            
+            # Final verification: Use env command to verify variables are actually in the environment
+            # This helps debug if variables are being lost somehow
+            log_info "Final environment check using 'env' command:"
+            if env | grep -q "^OMNI_AUTH_AUTH0_ENABLED=true"; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_ENABLED is in environment"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_ENABLED is NOT in environment!"
+                exit 1
+            fi
+            if env | grep -q "^OMNI_AUTH_AUTH0_DOMAIN="; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_DOMAIN is in environment"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_DOMAIN is NOT in environment!"
+                exit 1
+            fi
+            if env | grep -q "^OMNI_AUTH_AUTH0_CLIENT_ID="; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_ID is in environment"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_ID is NOT in environment!"
+                exit 1
+            fi
+            if env | grep -q "^OMNI_AUTH_AUTH0_CLIENT_SECRET="; then
+                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is in environment"
+            else
+                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT in environment!"
+                exit 1
+            fi
+            
             if [ ${#omni_args[@]} -gt 0 ]; then
                 log_info "Executing Omni with arguments (all OMNI_AUTH_* variables exported and ready)"
                 exec "$omni_path" "${omni_args[@]}"
