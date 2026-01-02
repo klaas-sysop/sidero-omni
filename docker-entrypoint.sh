@@ -162,8 +162,13 @@ validate_auth_config() {
             log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_ID is not set"
             exit 1
         fi
-        # Check if domain or client ID are placeholders
-        if is_placeholder "$auth0_domain" || is_placeholder "$auth0_client_id"; then
+        if [ -z "$auth0_client_secret" ]; then
+            log_error "AUTH0_ENABLED=true but AUTH0_CLIENT_SECRET is not set"
+            log_error "Auth0 requires a client secret to be configured. Please set AUTH0_CLIENT_SECRET or OMNI_AUTH_AUTH0_CLIENT_SECRET."
+            exit 1
+        fi
+        # Check if domain, client ID, or client secret are placeholders
+        if is_placeholder "$auth0_domain" || is_placeholder "$auth0_client_id" || is_placeholder "$auth0_client_secret"; then
             log_warn "Auth0 configuration appears to contain placeholder values, disabling Auth0"
             export OMNI_AUTH_AUTH0_ENABLED="false"
             auth0_enabled="false"
@@ -172,9 +177,7 @@ validate_auth_config() {
             # Export the values to ensure Omni receives them
             export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
             export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
-            # Always export client secret when Auth0 is enabled (even if empty, to ensure it's in environment)
-            # Omni may check for the presence of this variable to determine if Auth0 is properly configured
-            export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret:-}"
+            export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
         fi
     fi
     
@@ -794,8 +797,7 @@ main() {
             if [ "$final_auth0_check" = "true" ]; then
                 export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
-                # Always export client secret if it exists (even if empty, to ensure it's in environment)
-                # Omni may check for the presence of this variable to determine if Auth0 is properly configured
+                # Export client secret (required for Auth0 - validated earlier in validate_auth_config)
                 export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
             fi
             if [ "$final_saml_check" = "true" ]; then
@@ -847,7 +849,9 @@ main() {
             if [ -n "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}" ]; then
                 log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is set (length: ${#OMNI_AUTH_AUTH0_CLIENT_SECRET})"
             else
-                log_warn "  ⚠ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT set (this may cause Omni to reject Auth0 authentication)"
+                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT set!"
+                log_error "  This should have been caught by validate_auth_config(). Auth0 requires a client secret."
+                exit 1
             fi
             
             # Execute Omni - exec will preserve all exported environment variables
