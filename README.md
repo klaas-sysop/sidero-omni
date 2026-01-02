@@ -135,7 +135,9 @@ After deployment, you'll have:
 ├── certs/            # Certificate directory
 │   ├── tls.crt       # TLS certificate
 │   └── tls.key       # TLS private key
-└── etcd/             # etcd data directory
+├── etcd/             # etcd data directory
+└── sqlite/           # SQLite database directory
+    └── omni.db       # Omni SQLite database
 ```
 
 ## Troubleshooting

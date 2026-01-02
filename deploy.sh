@@ -378,6 +378,7 @@ create_directories() {
     print_info "Creating necessary directories..."
     
     mkdir -p ./etcd
+    mkdir -p ./sqlite
     mkdir -p ./certs
     
     print_info "Directories created!"
