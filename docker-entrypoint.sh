@@ -178,6 +178,15 @@ validate_auth_config() {
             export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
             export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
             export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
+            
+            # Verify that the exported secret is actually non-empty
+            # This catches edge cases where the variable might have been set to an empty string
+            if [ -z "${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}" ]; then
+                log_error "CRITICAL: OMNI_AUTH_AUTH0_CLIENT_SECRET was exported but is empty!"
+                log_error "This indicates AUTH0_CLIENT_SECRET or OMNI_AUTH_AUTH0_CLIENT_SECRET was not properly set."
+                log_error "Please ensure AUTH0_CLIENT_SECRET is set in your environment or .env file."
+                exit 1
+            fi
         fi
     fi
     
@@ -795,10 +804,33 @@ main() {
             # This is critical because exec replaces the process and we need to guarantee env vars are set
             # These values override Dockerfile ENV defaults and will be inherited by Omni via exec
             if [ "$final_auth0_check" = "true" ]; then
-                export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
-                export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
-                # Export client secret (required for Auth0 - validated earlier in validate_auth_config)
-                export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
+                # Get the values (prefer already exported OMNI_AUTH_* vars, fall back to original vars)
+                local auth0_domain_recheck="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
+                local auth0_client_id_recheck="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
+                local auth0_client_secret_recheck="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
+                
+                # Verify all required values are non-empty before re-exporting
+                if [ -z "$auth0_domain_recheck" ]; then
+                    log_error "CRITICAL: OMNI_AUTH_AUTH0_DOMAIN is empty before executing Omni!"
+                    log_error "This should have been caught by validate_auth_config()."
+                    exit 1
+                fi
+                if [ -z "$auth0_client_id_recheck" ]; then
+                    log_error "CRITICAL: OMNI_AUTH_AUTH0_CLIENT_ID is empty before executing Omni!"
+                    log_error "This should have been caught by validate_auth_config()."
+                    exit 1
+                fi
+                if [ -z "$auth0_client_secret_recheck" ]; then
+                    log_error "CRITICAL: OMNI_AUTH_AUTH0_CLIENT_SECRET is empty before executing Omni!"
+                    log_error "This should have been caught by validate_auth_config()."
+                    log_error "Please ensure AUTH0_CLIENT_SECRET is set in your environment or .env file."
+                    exit 1
+                fi
+                
+                # All values are non-empty, safe to export
+                export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain_recheck"
+                export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id_recheck"
+                export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret_recheck"
             fi
             if [ "$final_saml_check" = "true" ]; then
                 export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
@@ -852,6 +884,24 @@ main() {
                 log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT set!"
                 log_error "  This should have been caught by validate_auth_config(). Auth0 requires a client secret."
                 exit 1
+            fi
+            
+            # Final defensive check: Verify all required Auth0 variables are non-empty before executing Omni
+            # This catches any edge cases where variables might have been set to empty strings
+            if [ "$final_auth0_check" = "true" ]; then
+                local auth0_domain_final="${OMNI_AUTH_AUTH0_DOMAIN:-}"
+                local auth0_client_id_final="${OMNI_AUTH_AUTH0_CLIENT_ID:-}"
+                local auth0_client_secret_final="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-}"
+                
+                if [ -z "$auth0_domain_final" ] || [ -z "$auth0_client_id_final" ] || [ -z "$auth0_client_secret_final" ]; then
+                    log_error "CRITICAL: One or more required Auth0 variables are empty before executing Omni!"
+                    log_error "  OMNI_AUTH_AUTH0_DOMAIN: ${auth0_domain_final:+set (length: ${#auth0_domain_final})}${auth0_domain_final:-NOT SET}"
+                    log_error "  OMNI_AUTH_AUTH0_CLIENT_ID: ${auth0_client_id_final:+set (length: ${#auth0_client_id_final})}${auth0_client_id_final:-NOT SET}"
+                    log_error "  OMNI_AUTH_AUTH0_CLIENT_SECRET: ${auth0_client_secret_final:+set (length: ${#auth0_client_secret_final})}${auth0_client_secret_final:-NOT SET}"
+                    log_error "Please ensure all Auth0 environment variables are properly set in your .env file or environment."
+                    exit 1
+                fi
+                log_info "  ✓ Final check passed: All required Auth0 variables are non-empty"
             fi
             
             # Execute Omni - exec will preserve all exported environment variables
