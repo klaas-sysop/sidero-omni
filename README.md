@@ -167,6 +167,37 @@ After deployment, you'll have:
 - Ensure GPG is installed: `gpg --version`
 - Check key file exists: `ls -la omni.asc`
 
+**If you get "private key checksum failure" errors:**
+
+This usually happens when the GPG key file has Windows line endings (CRLF) instead of Unix line endings (LF). To fix:
+
+1. **Option 1: Fix line endings (if you have the original key):**
+   ```bash
+   # On Linux/Mac or WSL
+   dos2unix omni.asc
+   # Or using sed
+   sed -i 's/\r$//' omni.asc
+   ```
+
+2. **Option 2: Regenerate the key (will require clearing etcd data):**
+   ```bash
+   # Backup existing etcd data if needed
+   mv etcd etcd.backup
+   # Remove the corrupted key
+   rm omni.asc
+   # Regenerate using deploy.sh
+   ./deploy.sh --production  # or --self-signed
+   ```
+
+3. **Option 3: Ensure proper line endings in Git:**
+   - The `.gitattributes` file ensures `omni.asc` uses LF line endings
+   - If the file is already in Git with wrong endings, fix it:
+     ```bash
+     git rm --cached omni.asc
+     dos2unix omni.asc  # or sed -i 's/\r$//' omni.asc
+     git add omni.asc
+     ```
+
 ## Stopping and Removing
 
 ```bash
