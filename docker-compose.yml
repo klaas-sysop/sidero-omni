@@ -7,7 +7,7 @@ services:
     devices:
       - /dev/net/tun
     ports:
-      - "443:443"
+      - "8080:8080"
       - "8090:8090"
       - "8100:8100"
       - "50180:50180/udp"
@@ -30,7 +30,7 @@ services:
       - --private-key-source=file:///omni.asc
       - --sqlite-storage-path=/_out/sqlite/omni.db
       - --event-sink-port=8091
-      - --bind-addr=0.0.0.0:443
+      - --bind-addr=0.0.0.0:8080
       - --machine-api-bind-addr=0.0.0.0:8090
       - --k8s-proxy-bind-addr=0.0.0.0:8100
       - --advertised-api-url=https://${OMNI_DOMAIN_NAME}/
