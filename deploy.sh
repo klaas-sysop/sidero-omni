@@ -257,15 +257,49 @@ EOF
 setup_env_file() {
     print_info "Setting up environment file..."
     
-    if [ ! -f ".env.example" ]; then
-        print_error ".env.example not found!"
-        exit 1
-    fi
-    
     # Create .env from example if it doesn't exist
     if [ ! -f ".env" ]; then
-        cp .env.example .env
-        print_info "Created .env from .env.example"
+        if [ -f ".env.example" ]; then
+            cp .env.example .env
+            print_info "Created .env from .env.example"
+        else
+            # Create minimal .env file if .env.example doesn't exist
+            print_warn ".env.example not found, creating minimal .env file"
+            cat > .env <<EOF
+# Omni Version
+OMNI_VERSION=0.41.0
+
+# Account UUID (will be generated if not set)
+OMNI_ACCOUNT_UUID=
+
+# Domain Configuration
+OMNI_DOMAIN_NAME=
+OMNI_WG_IP=
+
+# Admin Configuration
+OMNI_ADMIN_EMAIL=
+OMNI_NAME=onprem-omni
+
+# Certificate Paths
+TLS_CERT_PATH=./certs/tls.crt
+TLS_KEY_PATH=./certs/tls.key
+
+# GPG Key Path
+GPG_KEY_PATH=./omni.asc
+
+# Auth0 Configuration
+AUTH0_ENABLED=true
+AUTH0_DOMAIN=
+AUTH0_CLIENT_ID=
+EOF
+            print_info "Created minimal .env file"
+        fi
+    else
+        if [ -f ".env.example" ]; then
+            print_info "Using existing .env file (.env.example is available as reference)"
+        else
+            print_info "Using existing .env file"
+        fi
     fi
     
     # Source .env to get current values
@@ -273,36 +307,45 @@ setup_env_file() {
     source .env 2>/dev/null || true
     set +a
     
+    # Helper function to set or append variable in .env
+    set_env_var() {
+        local var_name=$1
+        local var_value=$2
+        if grep -q "^${var_name}=" .env 2>/dev/null; then
+            # Variable exists, update it
+            sed -i.bak "s|^${var_name}=.*|${var_name}=${var_value}|" .env
+            rm -f .env.bak
+        else
+            # Variable doesn't exist, append it
+            echo "${var_name}=${var_value}" >> .env
+        fi
+    }
+    
     # Prompt for missing required variables
     if [ -z "$OMNI_DOMAIN_NAME" ]; then
         read -p "Enter Omni domain name (e.g., omni.example.com): " OMNI_DOMAIN_NAME
-        sed -i.bak "s/^OMNI_DOMAIN_NAME=.*/OMNI_DOMAIN_NAME=$OMNI_DOMAIN_NAME/" .env
-        rm -f .env.bak
+        set_env_var "OMNI_DOMAIN_NAME" "$OMNI_DOMAIN_NAME"
     fi
     
     if [ -z "$OMNI_WG_IP" ]; then
         read -p "Enter WireGuard IP address (e.g., 10.10.1.100): " OMNI_WG_IP
-        sed -i.bak "s/^OMNI_WG_IP=.*/OMNI_WG_IP=$OMNI_WG_IP/" .env
-        rm -f .env.bak
+        set_env_var "OMNI_WG_IP" "$OMNI_WG_IP"
     fi
     
     if [ -z "$OMNI_ADMIN_EMAIL" ]; then
         read -p "Enter admin email address: " OMNI_ADMIN_EMAIL
-        sed -i.bak "s/^OMNI_ADMIN_EMAIL=.*/OMNI_ADMIN_EMAIL=$OMNI_ADMIN_EMAIL/" .env
-        rm -f .env.bak
+        set_env_var "OMNI_ADMIN_EMAIL" "$OMNI_ADMIN_EMAIL"
     fi
     
     if [ "${AUTH0_ENABLED:-true}" = "true" ]; then
         if [ -z "$AUTH0_DOMAIN" ]; then
             read -p "Enter Auth0 domain (e.g., dev-xxxxx.us.auth0.com): " AUTH0_DOMAIN
-            sed -i.bak "s/^AUTH0_DOMAIN=.*/AUTH0_DOMAIN=$AUTH0_DOMAIN/" .env
-            rm -f .env.bak
+            set_env_var "AUTH0_DOMAIN" "$AUTH0_DOMAIN"
         fi
         
         if [ -z "$AUTH0_CLIENT_ID" ]; then
             read -p "Enter Auth0 client ID: " AUTH0_CLIENT_ID
-            sed -i.bak "s/^AUTH0_CLIENT_ID=.*/AUTH0_CLIENT_ID=$AUTH0_CLIENT_ID/" .env
-            rm -f .env.bak
+            set_env_var "AUTH0_CLIENT_ID" "$AUTH0_CLIENT_ID"
         fi
     fi
     
@@ -317,16 +360,14 @@ setup_env_file() {
         fi
         
         if [ -n "$OMNI_ACCOUNT_UUID" ]; then
-            sed -i.bak "s/^OMNI_ACCOUNT_UUID=.*/OMNI_ACCOUNT_UUID=$OMNI_ACCOUNT_UUID/" .env
-            rm -f .env.bak
+            set_env_var "OMNI_ACCOUNT_UUID" "$OMNI_ACCOUNT_UUID"
         fi
     fi
     
     # Update certificate paths based on mode
     if [ "$SELF_SIGNED" = true ]; then
-        sed -i.bak "s|^TLS_CERT_PATH=.*|TLS_CERT_PATH=./certs/tls.crt|" .env
-        sed -i.bak "s|^TLS_KEY_PATH=.*|TLS_KEY_PATH=./certs/tls.key|" .env
-        rm -f .env.bak
+        set_env_var "TLS_CERT_PATH" "./certs/tls.crt"
+        set_env_var "TLS_KEY_PATH" "./certs/tls.key"
     fi
     
     print_info "Environment file configured!"
