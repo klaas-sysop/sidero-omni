@@ -3,6 +3,7 @@ services:
     image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-latest}
     container_name: omni
     network_mode: host
+    networks: []
     cap_add:
       - NET_ADMIN
     devices:
@@ -38,5 +39,3 @@ services:
       - --auth-auth0-client-id=${AUTH0_CLIENT_ID}
       - --initial-users=${OMNI_ADMIN_EMAIL}
     restart: unless-stopped
-
-networks: {}
