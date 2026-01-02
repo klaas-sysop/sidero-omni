@@ -14,7 +14,7 @@ Easy deployment of Sidero Omni on-premises using Docker Compose with automated c
 ### 1. Clone or Download
 
 Ensure you have the deployment files:
-- `docker-compose.yaml`
+- `docker-compose.yml`
 - `.env.example`
 - `deploy.sh`
 
@@ -69,7 +69,7 @@ Copy `.env.example` to `.env` and configure the following variables:
 
 #### SAML
 
-To use SAML instead of Auth0, modify `docker-compose.yaml` to use SAML flags:
+To use SAML instead of Auth0, modify `docker-compose.yml` to use SAML flags:
 - `--auth-saml-enabled=true`
 - `--auth-saml-url=<your-saml-metadata-url>`
 
@@ -127,7 +127,7 @@ After deployment, you'll have:
 
 ```
 .
-├── docker-compose.yaml
+├── docker-compose.yml
 ├── .env
 ├── .env.example
 ├── deploy.sh
