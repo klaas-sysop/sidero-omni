@@ -177,14 +177,19 @@ validate_auth_config() {
             log_success "Auth0 configuration is valid (Domain: $auth0_domain, Client ID: $auth0_client_id)"
             if [ -n "$auth0_client_secret" ]; then
                 log_info "  Client secret provided (for non-SPA applications)"
+                # Export the values to ensure Omni receives them
+                export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
+                export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
+                export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret"
             else
                 log_info "  No client secret provided (using SPA/PKCE flow - this is normal for Single Page Applications)"
+                # Export the values to ensure Omni receives them
+                export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
+                export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
+                # For SPA applications, do NOT export OMNI_AUTH_AUTH0_CLIENT_SECRET at all
+                # Omni may check for the absence of this variable to determine SPA mode
+                unset OMNI_AUTH_AUTH0_CLIENT_SECRET
             fi
-            # Export the values to ensure Omni receives them
-            export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain"
-            export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id"
-            # Export client secret only if provided (empty string is acceptable for SPA applications)
-            export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret:-}"
         fi
     fi
     
@@ -819,15 +824,20 @@ main() {
                     log_error "This should have been caught by validate_auth_config()."
                     exit 1
                 fi
-                # Client secret is optional - empty is acceptable for SPA applications
-                if [ -z "$auth0_client_secret_recheck" ]; then
-                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is not set (using SPA/PKCE flow - this is normal)"
-                fi
-                
-                # Export values (client secret can be empty for SPA applications)
+                # Export required values
                 export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain_recheck"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id_recheck"
-                export OMNI_AUTH_AUTH0_CLIENT_SECRET="${auth0_client_secret_recheck:-}"
+                
+                # Client secret handling: export only if provided, unset if empty (for SPA applications)
+                if [ -n "$auth0_client_secret_recheck" ]; then
+                    export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret_recheck"
+                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is set (for non-SPA applications)"
+                else
+                    # For SPA applications, unset the variable entirely
+                    # Omni may check for the absence of this variable to determine SPA mode
+                    unset OMNI_AUTH_AUTH0_CLIENT_SECRET
+                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is not set (using SPA/PKCE flow - this is normal)"
+                fi
             fi
             if [ "$final_saml_check" = "true" ]; then
                 export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
