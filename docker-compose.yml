@@ -38,3 +38,5 @@ services:
       - --auth-auth0-client-id=${AUTH0_CLIENT_ID}
       - --initial-users=${OMNI_ADMIN_EMAIL}
     restart: unless-stopped
+
+networks: {}
