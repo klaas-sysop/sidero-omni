@@ -429,9 +429,55 @@ create_directories() {
     print_info "Directories created!"
 }
 
+# Create docker-compose override file for TLS configuration
+create_compose_override() {
+    # Source .env to check REVERSE_PROXY_MODE
+    set -a
+    source .env 2>/dev/null || true
+    set +a
+    
+    local override_file="docker-compose.override.yml"
+    
+    # Only create override file when in reverse proxy mode (to remove TLS flags)
+    # When not in reverse proxy mode, the base docker-compose.yml already has TLS flags
+    if [ "${REVERSE_PROXY_MODE:-false}" = "true" ]; then
+        print_info "Creating docker-compose override for reverse proxy mode (no TLS)..."
+        cat > "$override_file" <<EOF
+services:
+  omni:
+    command:
+      - --account-id=\${OMNI_ACCOUNT_UUID}
+      - --name=\${OMNI_NAME:-onprem-omni}
+      - --private-key-source=file:///omni.asc
+      - --sqlite-storage-path=/_out/sqlite/omni.db
+      - --event-sink-port=8091
+      - --bind-addr=0.0.0.0:8080
+      - --machine-api-bind-addr=0.0.0.0:8090
+      - --k8s-proxy-bind-addr=0.0.0.0:8100
+      - --advertised-api-url=https://\${OMNI_DOMAIN_NAME}/
+      - --machine-api-advertised-url=https://\${OMNI_DOMAIN_NAME}:8090/
+      - --siderolink-wireguard-advertised-addr=\${OMNI_WG_IP}:50180
+      - --advertised-kubernetes-proxy-url=https://\${OMNI_DOMAIN_NAME}:8100/
+      - --auth-auth0-enabled=\${AUTH0_ENABLED:-true}
+      - --auth-auth0-domain=\${AUTH0_DOMAIN}
+      - --auth-auth0-client-id=\${AUTH0_CLIENT_ID}
+      - --initial-users=\${OMNI_ADMIN_EMAIL}
+EOF
+    else
+        # Remove override file if it exists (in case REVERSE_PROXY_MODE was changed from true to false)
+        if [ -f "$override_file" ]; then
+            print_info "Removing docker-compose override file (using base configuration with TLS)..."
+            rm -f "$override_file"
+        fi
+    fi
+}
+
 # Deploy with docker compose
 deploy_omni() {
     print_info "Deploying Omni..."
+    
+    # Create docker-compose override file based on REVERSE_PROXY_MODE
+    create_compose_override
     
     # Source .env for docker compose
     set -a
