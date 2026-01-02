@@ -205,10 +205,17 @@ validate_auth_config() {
             log_warn "SAML_URL appears to be a placeholder value, disabling SAML"
             export OMNI_AUTH_SAML_ENABLED="false"
             saml_enabled="false"
+            # Clear SAML-related variables when disabled
+            unset OMNI_AUTH_SAML_URL
+            unset SAML_URL
         else
             log_success "SAML configuration is valid (URL: $saml_url)"
             export OMNI_AUTH_SAML_URL="$saml_url"
         fi
+    else
+        # Explicitly disable SAML if not enabled
+        export OMNI_AUTH_SAML_ENABLED="false"
+        unset OMNI_AUTH_SAML_URL
     fi
     
     # Validate OIDC configuration if enabled
@@ -234,6 +241,11 @@ validate_auth_config() {
             log_warn "OIDC configuration appears to contain placeholder values, disabling OIDC"
             export OMNI_AUTH_OIDC_ENABLED="false"
             oidc_enabled="false"
+            # Clear OIDC-related variables when disabled
+            unset OMNI_AUTH_OIDC_PROVIDER_URL
+            unset OMNI_AUTH_OIDC_CLIENT_ID
+            unset OMNI_AUTH_OIDC_CLIENT_SECRET
+            unset OMNI_AUTH_OIDC_LOGOUT_URL
         else
             log_success "OIDC configuration is valid (Provider: $oidc_provider_url)"
             export OMNI_AUTH_OIDC_PROVIDER_URL="$oidc_provider_url"
@@ -243,6 +255,13 @@ validate_auth_config() {
                 export OMNI_AUTH_OIDC_LOGOUT_URL="${OIDC_LOGOUT_URL:-${OMNI_AUTH_OIDC_LOGOUT_URL:-}}"
             fi
         fi
+    else
+        # Explicitly disable OIDC if not enabled
+        export OMNI_AUTH_OIDC_ENABLED="false"
+        unset OMNI_AUTH_OIDC_PROVIDER_URL
+        unset OMNI_AUTH_OIDC_CLIENT_ID
+        unset OMNI_AUTH_OIDC_CLIENT_SECRET
+        unset OMNI_AUTH_OIDC_LOGOUT_URL
     fi
     
     # Final check: ensure at least one authentication method is enabled
@@ -849,6 +868,10 @@ main() {
             fi
             if [ "$final_saml_check" = "true" ]; then
                 export OMNI_AUTH_SAML_URL="${OMNI_AUTH_SAML_URL:-${SAML_URL:-}}"
+            else
+                # Explicitly disable SAML and clear variables
+                export OMNI_AUTH_SAML_ENABLED="false"
+                unset OMNI_AUTH_SAML_URL
             fi
             if [ "$final_oidc_check" = "true" ]; then
                 export OMNI_AUTH_OIDC_PROVIDER_URL="${OMNI_AUTH_OIDC_PROVIDER_URL:-${OIDC_PROVIDER_URL:-}}"
@@ -857,6 +880,13 @@ main() {
                 if [ -n "${OMNI_AUTH_OIDC_LOGOUT_URL:-${OIDC_LOGOUT_URL:-}}" ]; then
                     export OMNI_AUTH_OIDC_LOGOUT_URL="${OMNI_AUTH_OIDC_LOGOUT_URL:-${OIDC_LOGOUT_URL:-}}"
                 fi
+            else
+                # Explicitly disable OIDC and clear variables
+                export OMNI_AUTH_OIDC_ENABLED="false"
+                unset OMNI_AUTH_OIDC_PROVIDER_URL
+                unset OMNI_AUTH_OIDC_CLIENT_ID
+                unset OMNI_AUTH_OIDC_CLIENT_SECRET
+                unset OMNI_AUTH_OIDC_LOGOUT_URL
             fi
             
             # Execute omni with arguments
