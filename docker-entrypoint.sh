@@ -960,6 +960,20 @@ main() {
             # Final verification: Use env command to verify variables are actually in the environment
             # This helps debug if variables are being lost somehow
             log_info "Final environment check using 'env' command:"
+            
+            # Debug: Show ALL OMNI_AUTH_* variables that will be passed to Omni
+            log_info "All OMNI_AUTH_* variables that will be passed to Omni:"
+            env | grep "^OMNI_AUTH_" | sort | while IFS= read -r line; do
+                # Mask sensitive values but show the variable name and whether it's set
+                if [[ "$line" == *"SECRET"* ]] || [[ "$line" == *"CLIENT_SECRET"* ]]; then
+                    local var_name="${line%%=*}"
+                    local var_value="${line#*=}"
+                    log_info "  $var_name=<masked> (length: ${#var_value})"
+                else
+                    log_info "  $line"
+                fi
+            done || true
+            
             if env | grep -q "^OMNI_AUTH_AUTH0_ENABLED=true"; then
                 log_info "  ✓ OMNI_AUTH_AUTH0_ENABLED is in environment"
             else
@@ -1000,12 +1014,36 @@ main() {
                 log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET set to empty (using SPA/PKCE flow)"
             fi
             
+            # CRITICAL: Before executing Omni, verify that all required Auth0 variables are actually exported
+            # This is a final sanity check to ensure Omni will see the variables
+            if [ "$final_auth0_check" = "true" ]; then
+                # Use a subshell to verify exports are actually in the environment
+                (
+                    export OMNI_AUTH_AUTH0_ENABLED="$final_auth0_check"
+                    export OMNI_AUTH_AUTH0_DOMAIN="${OMNI_AUTH_AUTH0_DOMAIN:-${AUTH0_DOMAIN:-}}"
+                    export OMNI_AUTH_AUTH0_CLIENT_ID="${OMNI_AUTH_AUTH0_CLIENT_ID:-${AUTH0_CLIENT_ID:-}}"
+                    export OMNI_AUTH_AUTH0_CLIENT_SECRET="${OMNI_AUTH_AUTH0_CLIENT_SECRET:-${AUTH0_CLIENT_SECRET:-}}"
+                    
+                    # Verify in subshell
+                    if [ -z "${OMNI_AUTH_AUTH0_DOMAIN}" ] || [ -z "${OMNI_AUTH_AUTH0_CLIENT_ID}" ]; then
+                        log_error "CRITICAL: Auth0 variables are not properly exported in subshell!"
+                        exit 1
+                    fi
+                    log_info "  ✓ Subshell verification passed: All Auth0 variables are exported"
+                ) || {
+                    log_error "CRITICAL: Failed to verify Auth0 variables in subshell!"
+                    exit 1
+                }
+            fi
+            
             if [ ${#omni_args[@]} -gt 0 ]; then
                 log_info "Executing Omni with arguments (all OMNI_AUTH_* variables exported and ready)"
+                # Use exec to replace the shell process, ensuring all exported environment variables are passed
                 exec "$omni_path" "${omni_args[@]}"
             else
                 log_warn "No command-line arguments provided, Omni may fail due to missing configuration"
                 log_info "Executing Omni (all OMNI_AUTH_* variables exported and ready)"
+                # Use exec to replace the shell process, ensuring all exported environment variables are passed
                 exec "$omni_path"
             fi
         else
