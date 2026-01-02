@@ -20,6 +20,13 @@ services:
     environment:
       - OMNI_ACCOUNT_ID=${OMNI_ACCOUNT_UUID}
       - OMNI_NAME=${OMNI_NAME:-onprem-omni}
+      - REVERSE_PROXY_MODE=${REVERSE_PROXY_MODE:-false}
+      - OMNI_DOMAIN_NAME=${OMNI_DOMAIN_NAME}
+      - OMNI_WG_IP=${OMNI_WG_IP}
+      - AUTH0_ENABLED=${AUTH0_ENABLED:-true}
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+      - OMNI_ADMIN_EMAIL=${OMNI_ADMIN_EMAIL}
     command:
       - --account-id=${OMNI_ACCOUNT_UUID}
       - --name=${OMNI_NAME:-onprem-omni}
