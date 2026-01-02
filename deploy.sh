@@ -170,29 +170,36 @@ generate_gpg_key() {
     if [ -f "$gpg_key_file" ]; then
         print_info "GPG key file exists. Validating..."
         
-        # Try to import and validate the key
-        local temp_gnupg=$(mktemp -d)
-        local old_gnupg="${GNUPGHOME:-}"
-        export GNUPGHOME="$temp_gnupg"
-        
-        # Try to import the key
-        if gpg --batch --import "$gpg_key_file" &> /dev/null 2>&1; then
-            # Check if we can list the key (validates it's not corrupted)
-            if gpg --list-secret-keys --with-colons 2>/dev/null | grep -q "^fpr"; then
-                rm -rf "$temp_gnupg"
-                [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
-                print_info "GPG key is valid. Using existing key."
-                return
+        # Check if key has passphrase protection (this would cause decryption failures)
+        if gpg --list-packets "$gpg_key_file" 2>/dev/null | grep -q "SHA1 protection"; then
+            print_warn "Existing GPG key has passphrase protection, which is incompatible with Omni."
+            print_warn "Backing up old key and generating a new one..."
+            mv "$gpg_key_file" "${gpg_key_file}.backup.$(date +%s)" 2>/dev/null || rm -f "$gpg_key_file"
+        else
+            # Try to import and validate the key
+            local temp_gnupg=$(mktemp -d)
+            local old_gnupg="${GNUPGHOME:-}"
+            export GNUPGHOME="$temp_gnupg"
+            
+            # Try to import the key
+            if gpg --batch --import "$gpg_key_file" &> /dev/null 2>&1; then
+                # Check if we can list the key (validates it's not corrupted)
+                if gpg --list-secret-keys --with-colons 2>/dev/null | grep -q "^fpr"; then
+                    rm -rf "$temp_gnupg"
+                    [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+                    print_info "GPG key is valid. Using existing key."
+                    return
+                fi
             fi
+            
+            # Key is invalid or corrupted
+            rm -rf "$temp_gnupg"
+            [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+            
+            print_warn "Existing GPG key appears to be corrupted or invalid."
+            print_warn "Backing up old key and generating a new one..."
+            mv "$gpg_key_file" "${gpg_key_file}.backup.$(date +%s)" 2>/dev/null || rm -f "$gpg_key_file"
         fi
-        
-        # Key is invalid or corrupted
-        rm -rf "$temp_gnupg"
-        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
-        
-        print_warn "Existing GPG key appears to be corrupted or invalid."
-        print_warn "Backing up old key and generating a new one..."
-        mv "$gpg_key_file" "${gpg_key_file}.backup.$(date +%s)" 2>/dev/null || rm -f "$gpg_key_file"
         
         # Warn about etcd data if it exists
         if [ -d "./etcd" ] && [ "$(ls -A ./etcd 2>/dev/null)" ]; then
@@ -252,33 +259,33 @@ EOF
         exit 1
     fi
     
-    # Create batch config for encryption subkey
-    local subkey_config=$(mktemp)
-    cat > "$subkey_config" <<EOF
-addkey
-rsa
-4096
-0
-save
-EOF
-    
-    # Add encryption subkey
-    if ! echo -e "addkey\nrsa\n4096\n0\nsave" | gpg --batch --command-fd 0 --edit-key "$fingerprint" &> /dev/null 2>&1; then
-        # Alternative: use quick-add-key if available
-        gpg --batch --quick-add-key "$fingerprint" rsa4096 encr never &> /dev/null 2>&1 || true
+    # Add encryption subkey without passphrase protection
+    # Use quick-add-key with pinentry-mode=loopback and empty passphrase to ensure no protection
+    if ! gpg --batch --pinentry-mode=loopback --passphrase="" --quick-add-key "$fingerprint" rsa4096 encr never &> /dev/null 2>&1; then
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+        print_error "Failed to add encryption subkey"
+        exit 1
     fi
     
-    rm -f "$subkey_config"
-    
     # Export key using fingerprint (more reliable than email)
-    if ! gpg --batch --export-secret-key --armor "$fingerprint" > "$gpg_key_file" 2>/dev/null; then
+    # Use pinentry-mode=loopback to avoid any passphrase prompts
+    if ! gpg --batch --pinentry-mode=loopback --passphrase="" --export-secret-key --armor "$fingerprint" > "$gpg_key_file" 2>/dev/null; then
         # Fallback to email if fingerprint doesn't work
-        if ! gpg --batch --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
+        if ! gpg --batch --pinentry-mode=loopback --passphrase="" --export-secret-key --armor "$email" > "$gpg_key_file" 2>/dev/null; then
             rm -rf "$temp_gnupg"
             [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
             print_error "Failed to export GPG key"
             exit 1
         fi
+    fi
+    
+    # Verify the exported key doesn't have passphrase protection
+    if gpg --list-packets "$gpg_key_file" 2>/dev/null | grep -q "SHA1 protection"; then
+        rm -rf "$temp_gnupg"
+        [ -n "$old_gnupg" ] && export GNUPGHOME="$old_gnupg" || unset GNUPGHOME
+        print_error "Generated key still has passphrase protection. This should not happen."
+        exit 1
     fi
     
     # Clean up temporary GPG home
