@@ -142,18 +142,18 @@ After deployment, you'll have:
 
 ## Troubleshooting
 
-### Docker Compose network_mode error in Dokploy
+### Deploying with Dokploy
 
-If you get an error like `"service omni declares mutually exclusive network_mode and networks"` when deploying with Dokploy:
+When deploying with Dokploy, make sure to:
 
-This is a known issue with some versions of Dokploy that automatically create networks. The compose file is correct, but Dokploy may be injecting network configurations.
+1. **Remove the domain configuration** from Dokploy's domain settings, OR
+2. **Use port mappings** (the compose file is already configured for this)
 
-**Possible solutions:**
-1. Check if Dokploy has a setting to disable automatic network creation
-2. Try using a different deployment method (direct Docker Compose)
-3. Contact Dokploy support about this issue
+The compose file uses port mappings instead of `network_mode: host` to be compatible with Dokploy's reverse proxy. If you configure a domain in Dokploy (e.g., `omni.staging.mondria.dev` on port 443), Dokploy will handle the reverse proxy automatically.
 
-The compose file uses `network_mode: host` which is required for Omni's WireGuard functionality.
+**Important:** If Dokploy is handling the reverse proxy on port 443, you may need to adjust the container's internal port. The current configuration binds to port 443 inside the container, which should work if Dokploy forwards traffic correctly.
+
+**Note:** WireGuard functionality may be limited without host networking. If you need full WireGuard support, consider deploying directly with Docker Compose instead of using Dokploy's reverse proxy.
 
 ### Container won't start
 
