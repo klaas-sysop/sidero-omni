@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  omni:
+    image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-0.41.0}
+    container_name: omni
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./etcd:/_out/etcd
+      - ${TLS_CERT_PATH:-./certs/tls.crt}:/tls.crt:ro
+      - ${TLS_KEY_PATH:-./certs/tls.key}:/tls.key:ro
+      - ${GPG_KEY_PATH:-./omni.asc}:/omni.asc:ro
+    environment:
+      - OMNI_ACCOUNT_ID=${OMNI_ACCOUNT_UUID}
+      - OMNI_NAME=${OMNI_NAME:-onprem-omni}
+    command:
+      - --account-id=${OMNI_ACCOUNT_UUID}
+      - --name=${OMNI_NAME:-onprem-omni}
+      - --cert=/tls.crt
+      - --key=/tls.key
+      - --siderolink-api-cert=/tls.crt
+      - --siderolink-api-key=/tls.key
+      - --private-key-source=file:///omni.asc
+      - --event-sink-port=8091
+      - --bind-addr=0.0.0.0:443
+      - --siderolink-api-bind-addr=0.0.0.0:8090
+      - --k8s-proxy-bind-addr=0.0.0.0:8100
+      - --advertised-api-url=https://${OMNI_DOMAIN_NAME}/
+      - --siderolink-api-advertised-url=https://${OMNI_DOMAIN_NAME}:8090/
+      - --siderolink-wireguard-advertised-addr=${OMNI_WG_IP}:50180
+      - --advertised-kubernetes-proxy-url=https://${OMNI_DOMAIN_NAME}:8100/
+      - --auth-auth0-enabled=${AUTH0_ENABLED:-true}
+      - --auth-auth0-domain=${AUTH0_DOMAIN}
+      - --auth-auth0-client-id=${AUTH0_CLIENT_ID}
+      - --initial-users=${OMNI_ADMIN_EMAIL}
+    restart: unless-stopped
+

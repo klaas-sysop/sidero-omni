@@ -1,539 +1,192 @@
-# Sidero Omni - One-Click Docker Deployment
+# Omni On-Prem Deployment
 
-Complete self-hosted deployment solution for Sidero Omni with automatic SSL certificate generation and one-click Dokploy deployment.
+Easy deployment of Sidero Omni on-premises using Docker Compose with automated certificate handling.
 
-## 🚀 Quick Start
+## Prerequisites
 
-```bash
-# 1. Configure
-cp .env.example .env
-nano .env  # Fill in your domain and credentials
+- Docker and Docker Compose installed
+- OpenSSL (for self-signed certificates)
+- GPG (for etcd encryption key generation)
+- For production: Valid SSL certificates (or use self-signed for testing)
 
-# 2. Deploy (everything automatic!)
-docker-compose up -d
+## Quick Start
 
-# 3. Access
-https://omni.example.com
-```
+### 1. Clone or Download
 
-That's it! SSL certificates, GPG keys, and Omni service all start automatically.
+Ensure you have the deployment files:
+- `docker-compose.yaml`
+- `.env.example`
+- `deploy.sh`
 
----
+### 2. Run Deployment Script
 
-## 📋 What's Included
-
-### Docker Ecosystem
-- **Dockerfile** - Custom image with automatic certificate generation
-- **docker-compose.yml** - Production-ready configuration
-- **docker-entrypoint.sh** - Smart startup script with cert generation
-- **Helper Scripts** - Certificate and GPG key generators
-
-### Documentation
-- **DOCKERFILE_QUICKREF.md** - 2-minute quick reference
-- **DOCKERFILE_GUIDE.md** - Complete Dockerfile guide with examples
-- **DEPLOYMENT_GUIDE.md** - General deployment guide
-- **DOKPLOY_DEPLOYMENT.md** - Dokploy-specific instructions
-
-### Configuration
-- **.env.example** - Template with all variables
-- **setup.sh** - Manual setup script (optional, for pre-generation)
-
----
-
-## ⚡ Key Features
-
-✅ **One-Click Deployment** - No manual setup needed  
-✅ **Automatic SSL Certificates** - Let's Encrypt via Cloudflare DNS  
-✅ **Automatic GPG Keys** - For etcd encryption  
-✅ **Self-Healing** - Regenerates missing certs/keys  
-✅ **Dokploy Ready** - Deploy directly from Dokploy dashboard  
-✅ **Multiple Auth Methods** - Auth0, SAML, OIDC support  
-✅ **Production Ready** - Health checks, logging, persistence  
-✅ **Backward Compatible** - Old setup.sh method still works  
-
----
-
-## 📚 Documentation
-
-Choose your deployment path:
-
-### 🎯 Just Want to Deploy?
-→ Read **[DOCKERFILE_QUICKREF.md](docs/DOCKERFILE_QUICKREF.md)** (2 minutes)
-
-### 🏗️ Self-Hosted on Linux
-→ Read **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** (10 minutes)
-
-### 🐳 Using Docker & Dockerfile
-→ Read **[DOCKERFILE_GUIDE.md](docs/DOCKERFILE_GUIDE.md)** (detailed reference)
-
-### ☁️ Deploying on Dokploy
-→ Read **[DOKPLOY_DEPLOYMENT.md](docs/DOKPLOY_DEPLOYMENT.md)** (step-by-step)
-
----
-
-## 🎬 Deployment Methods
-
-### Method 1: Local Docker (Fastest)
+The deployment script automates the entire setup process:
 
 ```bash
-# Configure
-cp .env.example .env
-nano .env
+# For testing with self-signed certificates
+./deploy.sh --self-signed
 
-# Deploy
-docker-compose up -d
-
-# Done! Access at https://your-domain.com
+# For production with existing certificates
+./deploy.sh --production
 ```
 
-**Time to production: 5 minutes**
+### 3. Access Omni
 
-### Method 2: Dokploy Cloud/Self-Hosted
+Once deployed, access Omni at:
+- Web UI: `https://<your-domain>`
+- API: `https://<your-domain>/api`
 
-1. Push to GitHub: `git push origin main`
-2. In Dokploy dashboard: Create project → Add Docker Compose service
-3. Set environment variables from `.env`
-4. Click Deploy
-5. Watch logs - done!
+## Configuration
 
-**Time to production: 10 minutes**
+### Environment Variables
 
-### Method 3: Manual Pre-Generation (Advanced)
+Copy `.env.example` to `.env` and configure the following variables:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OMNI_VERSION` | Omni container version | Yes |
+| `OMNI_DOMAIN_NAME` | Domain name for Omni | Yes |
+| `OMNI_WG_IP` | WireGuard IP address | Yes |
+| `OMNI_ADMIN_EMAIL` | Admin user email | Yes |
+| `AUTH0_DOMAIN` | Auth0 domain | Yes (if using Auth0) |
+| `AUTH0_CLIENT_ID` | Auth0 client ID | Yes (if using Auth0) |
+| `TLS_CERT_PATH` | Path to TLS certificate | Yes |
+| `TLS_KEY_PATH` | Path to TLS private key | Yes |
+| `GPG_KEY_PATH` | Path to GPG encryption key | Yes |
+
+### Authentication Setup
+
+#### Auth0 (Default)
+
+1. Create an [Auth0 account](https://auth0.com/signup)
+2. Create a "Single Page Web Application"
+3. Configure:
+   - Allowed callback URLs: `https://<your-domain>`
+   - Allowed web origins: `https://<your-domain>`
+   - Allowed logout URLs: `https://<your-domain>`
+4. Enable GitHub/Google login in Authentication → Social
+5. Copy your Domain and Client ID to `.env`
+
+#### SAML
+
+To use SAML instead of Auth0, modify `docker-compose.yaml` to use SAML flags:
+- `--auth-saml-enabled=true`
+- `--auth-saml-url=<your-saml-metadata-url>`
+
+## Deployment Modes
+
+### Self-Signed Certificates (Testing)
+
+The script automatically generates self-signed certificates valid for 365 days:
 
 ```bash
-# Pre-generate certificates locally
-./setup.sh
-
-# Commit to git
-git add certs/
-git push origin main
-
-# Then deploy with docker-compose
-docker-compose up -d
+./deploy.sh --self-signed
 ```
 
----
+**Note:** Self-signed certificates will show browser warnings. This is normal for testing.
 
-## 🔑 Essential Configuration
+### Production Certificates
 
-### Minimum Required Variables
+For production, you need valid SSL certificates. Options:
 
-```env
-DOMAIN_NAME=omni.example.com
-PUBLIC_IP=203.0.113.42
-CLOUDFLARE_API_TOKEN=your_token
-CLOUDFLARE_ZONE_ID=your_zone_id
-LETSENCRYPT_EMAIL=admin@example.com
-INITIAL_USERS=admin@example.com
-AUTH0_ENABLED=true              # Or SAML_ENABLED / OIDC_ENABLED
-AUTH0_DOMAIN=your-tenant.us.auth0.com
-AUTH0_CLIENT_ID=your_client_id
-```
-
-See **.env.example** for complete list of 50+ variables.
-
----
-
-## 🏗️ How It Works
-
-### Traditional Workflow (Before)
-```
-1. Run ./setup.sh manually
-2. Wait for certificates
-3. docker-compose up -d
-4. Service starts
-```
-
-### New Workflow (With Dockerfile)
-```
-1. Set .env variables
-2. docker-compose up -d
-   ├─ Docker builds image with certificate tools
-   ├─ Container starts entrypoint script
-   ├─ Entrypoint validates settings
-   ├─ Entrypoint generates certs (if needed)
-   ├─ Entrypoint generates GPG key (if needed)
-   └─ Entrypoint starts Omni service
-3. Done!
-```
-
-### What Happens on Container Start
-
-```
-Container Boot
-  ↓
-Validate Environment Variables
-  ├─ DOMAIN_NAME ✓
-  ├─ PUBLIC_IP ✓
-  ├─ ACCOUNT_ID ✓ (auto-generate if empty)
-  └─ ... (other required vars)
-  ↓
-Check for Existing Certificates
-  ├─ If valid → Use them
-  └─ If missing → Generate
-      ├─ If Cloudflare credentials set → Let's Encrypt
-      └─ If not → Self-signed (fallback)
-  ↓
-Check for Existing GPG Key
-  ├─ If exists → Use it
-  └─ If missing → Generate new
-  ↓
-Start Omni Service
-  ├─ Listen on :443 (HTTPS)
-  ├─ Listen on :8090 (Siderolink API)
-  ├─ Listen on :8100 (K8s Proxy)
-  ├─ Health check: /health
-  └─ Ready for connections
-```
-
----
-
-## 📁 Directory Structure
-
-```
-sidero-omni/
-├── Dockerfile                      # Custom image with cert tools
-├── docker-compose.yml              # Production config
-├── docker-entrypoint.sh            # Smart startup script
-├── generate-certs.sh               # Certificate helper
-├── generate-gpg-key.sh             # GPG key helper
-├── setup.sh                        # Manual setup (optional)
-│
-├── .env.example                    # Configuration template
-├── .env                            # Your configuration (git ignored)
-│
-├── certs/                          # Generated files (git ignored)
-│   ├── tls.crt                     # SSL certificate
-│   ├── tls.key                     # SSL private key
-│   ├── omni.asc                    # GPG key
-│   └── cloudflare.ini              # API credentials
-│
-├── data/                           # Persistent data (git ignored)
-│   ├── etcd/                       # Omni database
-│   └── state/                      # Service state
-│
-└── Documentation/
-    ├── README.md                   # This file
-    ├── DOCKERFILE_QUICKREF.md      # 2-minute guide
-    ├── DOCKERFILE_GUIDE.md         # Complete reference
-    ├── DEPLOYMENT_GUIDE.md         # General deployment
-    └── DOKPLOY_DEPLOYMENT.md       # Dokploy-specific
-```
-
----
-
-## 🔐 Certificate Options
-
-### Option 1: Automatic Let's Encrypt (Recommended)
-
-```env
-ENABLE_CERT_GENERATION=true
-CLOUDFLARE_API_TOKEN=your_token
-CLOUDFLARE_ZONE_ID=your_zone_id
-```
-
-Certificates auto-generate on container start.
-
-### Option 2: Self-Signed (Testing Only)
-
-```env
-ENABLE_CERT_GENERATION=true
-# Don't set Cloudflare credentials
-```
-
-Self-signed certs generated on startup (replace with valid certs for production).
-
-### Option 3: Pre-Generated Certificates
-
-```bash
-# Place your certs before starting
-cp /path/to/tls.crt certs/
-cp /path/to/tls.key certs/
-cp /path/to/omni.asc certs/
-
-docker-compose up -d
-```
-
----
-
-## 🔐 Authentication Methods
-
-Choose one (or more) authentication provider:
-
-### Auth0
-```env
-AUTH0_ENABLED=true
-AUTH0_DOMAIN=your-tenant.us.auth0.com
-AUTH0_CLIENT_ID=your_client_id
-```
-
-### SAML (Azure AD)
-```env
-SAML_ENABLED=true
-SAML_URL=https://login.microsoftonline.com/.../federationmetadata...
-```
-
-### OIDC (Keycloak, Okta, etc.)
-```env
-OIDC_ENABLED=true
-OIDC_PROVIDER_URL=https://your-provider.com
-OIDC_CLIENT_ID=your_client_id
-OIDC_CLIENT_SECRET=your_client_secret
-```
-
-See **DEPLOYMENT_GUIDE.md** for detailed setup of each provider.
-
----
-
-## ☁️ Dokploy Deployment
-
-### One-Click in Dokploy Dashboard
-
-1. **Create Project**
+1. **Use Let's Encrypt with Certbot:**
+   ```bash
+   sudo certbot certonly --standalone -d <your-domain>
    ```
-   Dashboard → Projects → Create New Project
+   Then point `TLS_CERT_PATH` and `TLS_KEY_PATH` to your certificates.
+
+2. **Use existing certificates:**
+   Place your certificate and key files in the `certs/` directory and update paths in `.env`.
+
+Then deploy:
+```bash
+./deploy.sh --production
+```
+
+## Manual Deployment
+
+If you prefer to deploy manually:
+
+1. Copy `.env.example` to `.env` and configure variables
+2. Generate GPG key (if not exists):
+   ```bash
+   gpg --quick-generate-key "Omni (Used for etcd data encryption) omni@example.com" rsa4096 cert never
+   gpg --list-secret-keys  # Get fingerprint
+   gpg --quick-add-key <fingerprint> rsa4096 encr never
+   gpg --export-secret-key --armor omni@example.com > omni.asc
+   ```
+3. Ensure certificates are in place
+4. Run:
+   ```bash
+   docker compose --env-file .env up -d
    ```
 
-2. **Add Docker Compose Service**
-   ```
-   Services → Add Service → Docker Compose
-   Source: Git Repository
-   Repository: https://github.com/yourusername/sidero-omni
-   ```
+## Directory Structure
 
-3. **Configure Environment**
-   Copy all variables from your `.env` into Dokploy
+After deployment, you'll have:
 
-4. **Deploy**
-   Click Deploy button and watch logs
-
-See **[DOKPLOY_DEPLOYMENT.md](DOKPLOY_DEPLOYMENT.md)** for detailed steps with screenshots.
-
----
-
-## 📊 Ports & Services
-
-| Port | Service | Protocol | Purpose |
-|------|---------|----------|---------|
-| 443 | Omni API | TCP/HTTPS | Web interface |
-| 8090 | Siderolink API | TCP | Cluster communication |
-| 8100 | K8s Proxy | TCP | Kubernetes proxy |
-| 8091 | Event Sink | TCP | Event streaming |
-| 50180 | WireGuard | UDP | VPN tunnel |
-
----
-
-## 🔍 Monitoring & Management
-
-### View Logs
-```bash
-docker-compose logs -f omni
+```
+.
+├── docker-compose.yaml
+├── .env
+├── .env.example
+├── deploy.sh
+├── omni.asc          # GPG encryption key (auto-generated)
+├── certs/            # Certificate directory
+│   ├── tls.crt       # TLS certificate
+│   └── tls.key       # TLS private key
+└── etcd/             # etcd data directory
 ```
 
-### Check Status
-```bash
-docker-compose ps
-```
+## Troubleshooting
 
-### Resource Usage
-```bash
-docker stats sidero-omni
-```
+### Container won't start
 
-### Restart Service
-```bash
-docker-compose restart omni
-```
+- Check logs: `docker compose logs omni`
+- Verify all environment variables are set in `.env`
+- Ensure certificates exist and are readable
+- Check that ports 443, 8090, 8100, and 50180 are available
 
-### Full Restart
-```bash
-docker-compose down
-docker-compose up -d
-```
+### Certificate errors
 
-### Rebuild Image
-```bash
-docker-compose build --no-cache
-docker-compose up -d
-```
+- For self-signed: Browser warnings are expected
+- For production: Ensure certificates are valid and not expired
+- Verify certificate paths in `.env` are correct
 
----
+### Authentication issues
 
-## 🛠️ Troubleshooting
+- Verify Auth0 credentials are correct
+- Check callback URLs match your domain
+- Ensure Auth0 application is configured correctly
 
-### Certificate Generation Fails
+### GPG key issues
 
-**Check DNS:**
-```bash
-nslookup omni.example.com
-# Should return your server IP
-```
+- The script auto-generates the key if missing
+- Ensure GPG is installed: `gpg --version`
+- Check key file exists: `ls -la omni.asc`
 
-**Test Cloudflare API:**
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://api.cloudflare.com/client/v4/user/tokens/verify
-```
-
-**View logs:**
-```bash
-docker-compose logs omni | grep -i "cert\|cloudflare\|error"
-```
-
-### Container Won't Start
+## Stopping and Removing
 
 ```bash
-# Full logs
-docker-compose logs omni
+# Stop containers
+docker compose down
 
-# Check image
-docker images | grep omni
-
-# Rebuild
-docker-compose build --no-cache
+# Remove containers and volumes (WARNING: deletes etcd data)
+docker compose down -v
 ```
 
-### Access Denied After Login
+## Updating Omni
 
-**Verify authentication is configured:**
-```bash
-docker-compose logs omni | grep -i "auth"
-```
+1. Update `OMNI_VERSION` in `.env`
+2. Run: `docker compose --env-file .env up -d --pull always`
 
-**Check .env has at least one auth method enabled:**
-```bash
-grep "AUTH0_ENABLED\|SAML_ENABLED\|OIDC_ENABLED" .env
-```
+## License
 
----
+Omni is available via a [Business Source License](https://github.com/siderolabs/omni/blob/main/LICENSE) which allows free installations in non-production environments. For production use, please contact [Sidero sales](mailto:sales@siderolabs.com).
 
-## 🔄 Updates & Maintenance
+## Support
 
-### Update Omni Version
-```bash
-# Update .env
-OMNI_VERSION=latest
+For issues and questions:
+- [Omni Documentation](https://omni.siderolabs.com/docs/)
+- [Sidero Labs](https://www.siderolabs.com/)
 
-# Rebuild and restart
-docker-compose build --no-cache
-docker-compose down
-docker-compose up -d
-```
-
-### Backup Data
-```bash
-docker-compose down
-tar -czf omni-backup-$(date +%s).tar.gz data/
-docker-compose up -d
-```
-
-### Restore Data
-```bash
-docker-compose down
-tar -xzf omni-backup-*.tar.gz
-docker-compose up -d
-```
-
-### Renew Certificates
-```bash
-sudo certbot renew --force-renewal
-sudo cp /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem certs/tls.crt
-sudo cp /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem certs/tls.key
-docker-compose restart omni
-```
-
----
-
-## 📦 Dockerfile Details
-
-The custom Dockerfile:
-- Extends `ghcr.io/siderolabs/omni:latest`
-- Installs certbot and DNS plugins
-- Includes certificate generation tools
-- Runs smart startup script
-- Handles all setup automatically
-
-No need to understand Docker internals - it just works!
-
----
-
-## ⚙️ Environment Variables
-
-### Certificate Generation (New)
-- `ENABLE_CERT_GENERATION` - Enable auto-generation (default: true)
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
-- `CLOUDFLARE_ZONE_ID` - Cloudflare zone ID
-- `LETSENCRYPT_EMAIL` - Let's Encrypt email
-- `DOMAIN_NAME` - Your domain
-
-### Omni Core
-- `OMNI_ACCOUNT_ID` - Unique account ID
-- `OMNI_NAME` - Installation name
-- `INITIAL_USERS` - Admin user email
-
-### Authentication
-- `AUTH0_ENABLED`, `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`
-- `SAML_ENABLED`, `SAML_URL`
-- `OIDC_ENABLED`, `OIDC_PROVIDER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`
-
-See **.env.example** for complete list of 50+ variables.
-
----
-
-## 🤝 Contributing
-
-Found an issue? Have improvements?
-1. Fork the repository
-2. Make changes
-3. Test locally
-4. Submit pull request
-
----
-
-## 📄 License
-
-Sidero Omni is available under the Business Source License (BSL).
-Free for non-production environments.
-Contact Sidero for production licensing.
-
----
-
-## 🔗 Resources
-
-- **Omni Docs**: https://omni.siderolabs.com/docs
-- **Sidero Labs**: https://siderolabs.com
-- **Dokploy**: https://dokploy.com
-- **Let's Encrypt**: https://letsencrypt.org
-- **Cloudflare**: https://cloudflare.com
-
----
-
-## 📞 Support
-
-- **Documentation**: See guides above
-- **Issues**: Check troubleshooting section
-- **Logs**: `docker-compose logs -f omni`
-- **GitHub Issues**: Report bugs in repository
-
----
-
-## 🎉 Quick Reference
-
-| Task | Command |
-|------|---------|
-| Configure | `cp .env.example .env && nano .env` |
-| Deploy | `docker-compose up -d` |
-| View logs | `docker-compose logs -f omni` |
-| Check status | `docker-compose ps` |
-| Restart | `docker-compose restart omni` |
-| Stop | `docker-compose down` |
-| Rebuild | `docker-compose build --no-cache` |
-| Access Omni | `https://your-domain.com` |
-
----
-
-**Ready to deploy? Start with `.env.example` and `docker-compose up -d`!** 🚀
-
-Last updated: December 2025  
-Tested on: Ubuntu 22.04+, Docker 24+, Docker Compose 2.20+
-Docker Compose deployment for Sidero Omni
