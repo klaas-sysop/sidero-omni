@@ -824,19 +824,30 @@ main() {
                     log_error "This should have been caught by validate_auth_config()."
                     exit 1
                 fi
+                
+                # Check if client secret is a placeholder (treat as unset for SPAs)
+                if [ -n "$auth0_client_secret_recheck" ] && is_placeholder "$auth0_client_secret_recheck"; then
+                    log_warn "OMNI_AUTH_AUTH0_CLIENT_SECRET appears to be a placeholder, treating as unset (SPA mode)"
+                    auth0_client_secret_recheck=""
+                fi
+                
                 # Export required values
                 export OMNI_AUTH_AUTH0_DOMAIN="$auth0_domain_recheck"
                 export OMNI_AUTH_AUTH0_CLIENT_ID="$auth0_client_id_recheck"
                 
-                # Client secret handling: export only if provided, unset if empty (for SPA applications)
+                # Client secret handling: export only if provided and non-empty, unset if empty (for SPA applications)
+                # CRITICAL: For SPAs, the client secret MUST be unset (not just empty) for Omni to recognize SPA mode
                 if [ -n "$auth0_client_secret_recheck" ]; then
                     export OMNI_AUTH_AUTH0_CLIENT_SECRET="$auth0_client_secret_recheck"
                     log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is set (for non-SPA applications)"
                 else
-                    # For SPA applications, unset the variable entirely
-                    # Omni may check for the absence of this variable to determine SPA mode
+                    # For SPA applications, explicitly unset the variable entirely
+                    # This is critical: Omni checks for the absence of this variable to determine SPA mode
+                    # Using unset ensures the variable is completely removed from the environment
                     unset OMNI_AUTH_AUTH0_CLIENT_SECRET
-                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is not set (using SPA/PKCE flow - this is normal)"
+                    # Also unset the original variable name to be safe
+                    unset AUTH0_CLIENT_SECRET
+                    log_info "  Note: OMNI_AUTH_AUTH0_CLIENT_SECRET is explicitly unset (using SPA/PKCE flow - this is normal)"
                 fi
             fi
             if [ "$final_saml_check" = "true" ]; then
@@ -940,11 +951,28 @@ main() {
                 log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_ID is NOT in environment!"
                 exit 1
             fi
+            # Check if OMNI_AUTH_AUTH0_CLIENT_SECRET is in environment
+            # For SPAs, this should NOT be set (Omni uses PKCE flow instead)
             if env | grep -q "^OMNI_AUTH_AUTH0_CLIENT_SECRET="; then
-                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is in environment"
+                local secret_value=$(env | grep "^OMNI_AUTH_AUTH0_CLIENT_SECRET=" | cut -d'=' -f2-)
+                if [ -n "$secret_value" ]; then
+                    # Check if it's a placeholder
+                    if is_placeholder "$secret_value"; then
+                        log_warn "  ⚠ OMNI_AUTH_AUTH0_CLIENT_SECRET is a placeholder - unsetting for SPA mode"
+                        unset OMNI_AUTH_AUTH0_CLIENT_SECRET
+                        unset AUTH0_CLIENT_SECRET
+                        log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET unset (using SPA/PKCE flow)"
+                    else
+                        log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is in environment (length: ${#secret_value})"
+                    fi
+                else
+                    log_warn "  ⚠ OMNI_AUTH_AUTH0_CLIENT_SECRET is in environment but empty - unsetting for SPA mode"
+                    unset OMNI_AUTH_AUTH0_CLIENT_SECRET
+                    unset AUTH0_CLIENT_SECRET
+                    log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET unset (using SPA/PKCE flow)"
+                fi
             else
-                log_error "  ✗ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT in environment!"
-                exit 1
+                log_info "  ✓ OMNI_AUTH_AUTH0_CLIENT_SECRET is NOT in environment (expected for SPA/PKCE flow)"
             fi
             
             if [ ${#omni_args[@]} -gt 0 ]; then
