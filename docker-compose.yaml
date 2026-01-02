@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   omni:
-    image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-0.41.0}
+    image: ghcr.io/siderolabs/omni:${OMNI_VERSION:-latest}
     container_name: omni
     network_mode: host
     cap_add:

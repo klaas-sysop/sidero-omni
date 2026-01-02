@@ -44,7 +44,7 @@ Copy `.env.example` to `.env` and configure the following variables:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OMNI_VERSION` | Omni container version | Yes |
+| `OMNI_VERSION` | Omni container version (use `latest` or specific version like `v1.0.0`) | Yes |
 | `OMNI_DOMAIN_NAME` | Domain name for Omni | Yes |
 | `OMNI_WG_IP` | WireGuard IP address | Yes |
 | `OMNI_ADMIN_EMAIL` | Admin user email | Yes |

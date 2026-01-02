@@ -266,8 +266,8 @@ setup_env_file() {
             # Create minimal .env file if .env.example doesn't exist
             print_warn ".env.example not found, creating minimal .env file"
             cat > .env <<EOF
-# Omni Version
-OMNI_VERSION=0.41.0
+# Omni Version (use 'latest' or a specific version like 'v1.0.0')
+OMNI_VERSION=latest
 
 # Account UUID (will be generated if not set)
 OMNI_ACCOUNT_UUID=
@@ -401,11 +401,24 @@ deploy_omni() {
     
     # Pull latest image
     print_info "Pulling Omni image..."
-    $DOCKER_COMPOSE_CMD --env-file .env pull
+    if ! $DOCKER_COMPOSE_CMD --env-file .env pull; then
+        print_error "Failed to pull Omni image"
+        print_warn "The image version '${OMNI_VERSION:-latest}' may not exist."
+        print_info "Available options:"
+        print_info "  1. Check available versions at: https://github.com/siderolabs/omni/releases"
+        print_info "  2. Set OMNI_VERSION in .env to a valid version (e.g., v1.0.0)"
+        print_info "  3. Use 'latest' tag (already set as default)"
+        print_info ""
+        print_warn "Attempting to continue with existing image (if available)..."
+    fi
     
     # Start containers
     print_info "Starting Omni container..."
-    $DOCKER_COMPOSE_CMD --env-file .env up -d
+    if ! $DOCKER_COMPOSE_CMD --env-file .env up -d; then
+        print_error "Failed to start Omni container"
+        print_info "Check logs with: $DOCKER_COMPOSE_CMD --env-file .env logs omni"
+        exit 1
+    fi
     
     # Wait a moment for container to start
     sleep 3
